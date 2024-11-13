@@ -2,12 +2,16 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  deleteUser,
   fetchSignInMethodsForEmail,
   getAuth,
   linkWithCredential,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -21,6 +25,7 @@ import {
   getDocs,
   getFirestore,
   setDoc,
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
 /*
@@ -43,6 +48,8 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
+const OFFLINE_PREVIEW_STORAGE_KEY = "healthLedger.offlinePreview.v1";
+const MACRO_CALORIE_MARGIN = 15;
 
 googleProvider.setCustomParameters({
   prompt: "select_account",
@@ -90,6 +97,7 @@ const appState = {
   authPending: false,
   pendingGoogleCredential: null,
   pendingLinkEmail: "",
+  previewMode: false,
 };
 
 const dom = {};
@@ -100,8 +108,10 @@ function initializeInterface() {
   cacheDomReferences();
   bindEvents();
   seedFormDates();
+  updateMacroInputMode();
   resetWorkoutForm();
   setDailyQuote();
+  configureOfflinePreviewUi();
   setAppLocked(true);
   renderSignedOutState();
   setLoadingState(true, "Checking your secure session...");
@@ -136,6 +146,8 @@ function cacheDomReferences() {
   dom.dashboardWeekTitle = document.getElementById("dashboard-week-title");
   dom.dashboardWeekCaption = document.getElementById("dashboard-week-caption");
   dom.dashboardWeekSelect = document.getElementById("dashboard-week-select");
+  dom.quickWaterProgress = document.getElementById("quick-water-progress");
+  dom.quickWaterButton = document.getElementById("quick-water-button");
   dom.insightCards = document.getElementById("insight-cards");
   dom.alertCards = document.getElementById("alert-cards");
 
@@ -149,6 +161,9 @@ function cacheDomReferences() {
   dom.exerciseList = document.getElementById("exercise-list");
   dom.addExerciseButton = document.getElementById("add-exercise-button");
   dom.macroPreview = document.getElementById("macro-preview");
+  dom.dailyProteinLabel = document.getElementById("daily-protein-label");
+  dom.dailyCarbsLabel = document.getElementById("daily-carbs-label");
+  dom.dailyFatLabel = document.getElementById("daily-fat-label");
 
   dom.dailyHistoryBody = document.getElementById("daily-history-body");
   dom.workoutHistoryBody = document.getElementById("workout-history-body");
@@ -169,6 +184,9 @@ function cacheDomReferences() {
   dom.emailSigninButton = document.getElementById("email-signin-button");
   dom.emailSignupButton = document.getElementById("email-signup-button");
   dom.authFeedback = document.getElementById("auth-feedback");
+  dom.offlinePreviewBlock = document.getElementById("offline-preview-block");
+  dom.offlinePreviewCopy = document.getElementById("offline-preview-copy");
+  dom.offlinePreviewButton = document.getElementById("offline-preview-button");
 
   dom.accountModal = document.getElementById("account-modal");
   dom.accountForm = document.getElementById("account-form");
@@ -176,6 +194,8 @@ function cacheDomReferences() {
   dom.accountPhotoUrl = document.getElementById("account-photo-url");
   dom.accountModalClose = document.getElementById("account-modal-close");
   dom.accountModalCancel = document.getElementById("account-modal-cancel");
+  dom.accountDeletePassword = document.getElementById("account-delete-password");
+  dom.accountDeleteButton = document.getElementById("account-delete-button");
 
   dom.preferencesModal = document.getElementById("preferences-modal");
   dom.preferencesModalClose = document.getElementById("preferences-modal-close");
@@ -205,9 +225,14 @@ function bindEvents() {
 
   dom.dailyForm.addEventListener("submit", handleDailyLogSubmit);
   dom.dailyForm.addEventListener("input", updateNutritionPreview);
+  dom.dailyForm.elements.macroMode.addEventListener("change", () => {
+    updateMacroInputMode();
+    updateNutritionPreview();
+  });
   dom.dailyForm.elements.date.addEventListener("change", () => {
     populateDailyFormForDate(dom.dailyForm.elements.date.value);
   });
+  dom.quickWaterButton.addEventListener("click", handleQuickWaterAdd);
 
   dom.workoutForm.addEventListener("submit", handleWorkoutLogSubmit);
   dom.settingsForm.addEventListener("submit", handleSettingsSubmit);
@@ -218,6 +243,7 @@ function bindEvents() {
   dom.googleSigninButton.addEventListener("click", handleGoogleSignIn);
   dom.authForm.addEventListener("submit", handleEmailSignIn);
   dom.emailSignupButton.addEventListener("click", handleEmailSignUp);
+  dom.offlinePreviewButton.addEventListener("click", handleOfflinePreviewStart);
   dom.profileAvatarImage.addEventListener("error", () => {
     dom.profileAvatarImage.hidden = true;
     dom.profileAvatarImage.removeAttribute("src");
@@ -232,6 +258,7 @@ function bindEvents() {
   dom.accountForm.addEventListener("submit", handleAccountSubmit);
   dom.accountModalClose.addEventListener("click", () => closeUtilityModal(dom.accountModal));
   dom.accountModalCancel.addEventListener("click", () => closeUtilityModal(dom.accountModal));
+  dom.accountDeleteButton.addEventListener("click", handleAccountDelete);
 
   dom.preferencesModalClose.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
   dom.preferencesModalCancel.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
@@ -251,6 +278,11 @@ function bindEvents() {
 */
 
 async function handleAuthStateChange(user) {
+  if (appState.previewMode && !user) {
+    setLoadingState(false);
+    return;
+  }
+
   const hadUser = Boolean(appState.currentUser);
   clearStatusMessage();
   setAuthPending(false);
@@ -299,6 +331,14 @@ async function handleAuthStateChange(user) {
 }
 
 async function handleGoogleSignIn() {
+  if (shouldOfferOfflinePreview()) {
+    setAuthFeedback(
+      "This local preview cannot reliably complete Firebase sign-in. Use a local server or continue in offline preview mode.",
+      "error"
+    );
+    return;
+  }
+
   setAuthFeedback("");
   setAuthPending(true);
 
@@ -356,6 +396,14 @@ async function handleEmailSignUp() {
 }
 
 async function submitEmailAuth(mode) {
+  if (shouldOfferOfflinePreview()) {
+    setAuthFeedback(
+      "Email sign-in needs a served web app. Use a local server or continue in offline preview mode here.",
+      "error"
+    );
+    return;
+  }
+
   const email = dom.authEmail.value.trim();
   const password = dom.authPassword.value;
 
@@ -388,6 +436,18 @@ async function submitEmailAuth(mode) {
 
 async function handleLogoutConfirm() {
   closeUtilityModal(dom.logoutModal);
+
+  if (appState.previewMode) {
+    appState.previewMode = false;
+    appState.currentUser = null;
+    clearUserDataState();
+    renderSignedOutState();
+    setSessionState(null);
+    setAppLocked(true);
+    showStatusMessage("Offline preview closed.");
+    return;
+  }
+
   setLoadingState(true, "Signing you out...");
 
   try {
@@ -422,15 +482,15 @@ async function hydrateUserWorkspace(uid) {
     .map((snapshot) => normalizeWorkoutLog({ id: snapshot.id, ...snapshot.data() }))
     .sort(sortByDateAsc);
 
-  populateSettingsForm();
-  resetWorkoutForm();
-  populateDailyFormForDate(getLocalDateString());
-  renderHistoryTables();
-  renderStorageStatus();
-  refreshCurrentView(getActiveViewName());
+  syncWorkspaceUiFromState();
 }
 
 async function ensureUserProfile(user) {
+  if (appState.previewMode) {
+    persistOfflinePreviewWorkspace();
+    return;
+  }
+
   await setDoc(
     getUserProfileDoc(user.uid),
     {
@@ -452,6 +512,12 @@ async function saveDailyLog(dailyLog) {
     : mergeDailyLogs(createEmptyDailyLog(dailyLog.date), dailyLog);
   const normalizedLog = normalizeDailyLog(mergedLog);
 
+  if (appState.previewMode) {
+    upsertDailyLogInState(normalizedLog);
+    persistOfflinePreviewWorkspace();
+    return normalizedLog;
+  }
+
   await setDoc(getUserDailyLogDoc(user.uid, normalizedLog.date), clonePlainData(normalizedLog), {
     merge: true,
   });
@@ -463,6 +529,17 @@ async function saveDailyLog(dailyLog) {
 async function saveWorkoutLog(workoutLog) {
   const user = requireAuthenticatedUser();
   const normalizedLog = normalizeWorkoutLog(workoutLog);
+
+  if (appState.previewMode) {
+    const savedLog = {
+      ...normalizedLog,
+      id: normalizedLog.id || generateOfflineId(),
+    };
+    upsertWorkoutLogInState(savedLog);
+    persistOfflinePreviewWorkspace();
+    return savedLog;
+  }
+
   const { id, ...payload } = normalizedLog;
   const docRef = await addDoc(getUserWorkoutLogsCollection(user.uid), clonePlainData(payload));
   const savedLog = { ...normalizedLog, id: docRef.id };
@@ -474,10 +551,56 @@ async function saveUserSettings(userSettings) {
   const user = requireAuthenticatedUser();
   const normalizedSettings = normalizeUserSettings(userSettings);
 
+  if (appState.previewMode) {
+    appState.userSettings = normalizedSettings;
+    persistOfflinePreviewWorkspace();
+    return normalizedSettings;
+  }
+
   await setDoc(getUserSettingsDoc(user.uid), clonePlainData(normalizedSettings), { merge: true });
 
   appState.userSettings = normalizedSettings;
   return normalizedSettings;
+}
+
+async function reauthenticateForAccountDeletion(user) {
+  const providerIds = user.providerData.map((provider) => provider.providerId);
+
+  if (providerIds.includes("password")) {
+    const password = dom.accountDeletePassword.value;
+
+    if (!password) {
+      throw new Error("Enter your current password before deleting this email/password account.");
+    }
+
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+    return;
+  }
+
+  if (providerIds.includes("google.com")) {
+    await reauthenticateWithPopup(user, googleProvider);
+  }
+}
+
+async function deleteUserWorkspace(uid) {
+  const [dailyLogsSnapshot, workoutLogsSnapshot] = await Promise.all([
+    getDocs(getUserDailyLogsCollection(uid)),
+    getDocs(getUserWorkoutLogsCollection(uid)),
+  ]);
+
+  const docRefs = [
+    ...dailyLogsSnapshot.docs.map((snapshot) => snapshot.ref),
+    ...workoutLogsSnapshot.docs.map((snapshot) => snapshot.ref),
+    getUserSettingsDoc(uid),
+    getUserProfileDoc(uid),
+  ];
+
+  for (let index = 0; index < docRefs.length; index += 450) {
+    const batch = writeBatch(db);
+    docRefs.slice(index, index + 450).forEach((docRef) => batch.delete(docRef));
+    await batch.commit();
+  }
 }
 
 function getUserProfileDoc(uid) {
@@ -535,15 +658,27 @@ async function handleDailyLogSubmit(event) {
     return;
   }
 
-  const calories = toNumberOrNull(dom.dailyForm.elements.calories.value);
+  const enteredCalories = toNumberOrNull(dom.dailyForm.elements.calories.value);
   const protein = toNumberOrNull(dom.dailyForm.elements.protein.value);
   const carbPercent = toNumberOrNull(dom.dailyForm.elements.carbPercent.value);
   const fatPercent = toNumberOrNull(dom.dailyForm.elements.fatPercent.value);
+  const macroMode = dom.dailyForm.elements.macroMode.value;
 
-  const macroPayload = buildMacroPayloadFromInputs(calories, protein, carbPercent, fatPercent);
+  const macroPayload = buildMacroPayloadFromInputs(
+    enteredCalories,
+    protein,
+    carbPercent,
+    fatPercent,
+    macroMode
+  );
   if (macroPayload.error) {
     showStatusMessage(macroPayload.error, true);
     return;
+  }
+
+  const calories = macroPayload.calories;
+  if (macroPayload.autoCalculatedCalories) {
+    dom.dailyForm.elements.calories.value = Math.round(calories);
   }
 
   const dailyLog = {
@@ -576,6 +711,50 @@ async function handleDailyLogSubmit(event) {
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
     setLoadingState(false);
+  }
+}
+
+async function handleQuickWaterAdd() {
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before adding water.", true);
+    setAppLocked(true);
+    return;
+  }
+
+  const today = getLocalDateString();
+  const existingLog = getExistingDailyLog(today) || createEmptyDailyLog(today);
+  const settings = appState.userSettings;
+  const currentGlasses = toNumberOrNull(existingLog.water?.glasses) ?? 0;
+  const targetGlasses =
+    toNumberOrNull(existingLog.water?.targetGlasses) ?? settings.waterTargetGlasses;
+  const unitAmountMl =
+    toNumberOrNull(existingLog.water?.unitAmountMl) ?? settings.waterUnitAmountMl;
+
+  dom.quickWaterButton.disabled = true;
+
+  try {
+    const savedLog = await saveDailyLog({
+      date: today,
+      water: {
+        glasses: roundToOneDecimal(currentGlasses + 1),
+        targetGlasses,
+        unitAmountMl,
+      },
+    });
+
+    if (dom.dailyForm.elements.date.value === today) {
+      populateDailyFormForDate(today);
+    }
+
+    renderHistoryTables();
+    renderStorageStatus();
+    renderDashboard();
+    showStatusMessage(`Added 1 glass of water. Today is now ${formatMaybeNumber(savedLog.water.glasses)} / ${formatMaybeNumber(targetGlasses)} glasses.`);
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    dom.quickWaterButton.disabled = false;
   }
 }
 
@@ -682,6 +861,20 @@ async function handleAccountSubmit(event) {
   setLoadingState(true, "Saving account details...", "Updating your profile");
 
   try {
+    if (appState.previewMode) {
+      appState.currentUser = {
+        ...appState.currentUser,
+        displayName: displayName || "Offline Preview",
+        photoURL: photoURL || "",
+      };
+      persistOfflinePreviewWorkspace();
+      setSessionState(appState.currentUser);
+      refreshCurrentView(getActiveViewName());
+      closeUtilityModal(dom.accountModal);
+      showStatusMessage("Your offline preview profile has been updated.");
+      return;
+    }
+
     await updateProfile(auth.currentUser, {
       displayName: displayName || null,
       photoURL: photoURL || null,
@@ -693,6 +886,61 @@ async function handleAccountSubmit(event) {
     refreshCurrentView(getActiveViewName());
     closeUtilityModal(dom.accountModal);
     showStatusMessage("Your account profile has been updated.");
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+async function handleAccountDelete() {
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before deleting your account.", true);
+    setAppLocked(true);
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Delete your Health Ledger account and all stored logs? This cannot be undone."
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setLoadingState(true, "Deleting account data...", "Deleting your account");
+
+  try {
+    if (appState.previewMode) {
+      localStorage.removeItem(OFFLINE_PREVIEW_STORAGE_KEY);
+      appState.previewMode = false;
+      appState.currentUser = null;
+      clearUserDataState();
+      renderSignedOutState();
+      setSessionState(null);
+      setAppLocked(true);
+      closeUtilityModal(dom.accountModal);
+      showStatusMessage("Offline preview account data has been deleted.");
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error("Your session ended. Sign in again before deleting the account.");
+    }
+
+    await reauthenticateForAccountDeletion(user);
+    await deleteUserWorkspace(user.uid);
+    await deleteUser(user);
+
+    appState.currentUser = null;
+    clearUserDataState();
+    renderSignedOutState();
+    setSessionState(null);
+    setAppLocked(true);
+    closeUtilityModal(dom.accountModal);
+    showStatusMessage("Your Health Ledger account and stored data have been deleted.");
   } catch (error) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
@@ -785,10 +1033,14 @@ function populateDailyFormForDate(date) {
   const log = existingLog || createEmptyDailyLog(date);
   const derivedPercentages = deriveMacroPercentages(log.calories, log.macros);
 
+  dom.dailyForm.elements.macroMode.value = "percentage";
+  updateMacroInputMode();
   dom.dailyForm.elements.date.value = date;
   dom.dailyForm.elements.weight.value = valueOrEmpty(log.weight);
   dom.dailyForm.elements.calories.value = valueOrEmpty(log.calories);
-  dom.dailyForm.elements.protein.value = valueOrEmpty(log.macros.protein);
+  dom.dailyForm.elements.protein.value = valueOrEmpty(
+    log.macroPercentages.protein ?? derivedPercentages.protein
+  );
   dom.dailyForm.elements.carbPercent.value = valueOrEmpty(
     log.macroPercentages.carbs ?? derivedPercentages.carbs
   );
@@ -838,6 +1090,24 @@ function clearStatusMessage() {
 }
 
 function renderStorageStatus() {
+  if (appState.previewMode) {
+    const snapshot = JSON.stringify({
+      userSettings: appState.userSettings,
+      dailyLogs: appState.dailyLogs,
+      workoutLogs: appState.workoutLogs,
+      profile: {
+        displayName: appState.currentUser?.displayName || "",
+        photoURL: appState.currentUser?.photoURL || "",
+      },
+    });
+
+    dom.storageStatus.textContent =
+      `Offline preview is active. ${appState.dailyLogs.length} daily logs and ` +
+      `${appState.workoutLogs.length} workouts are being stored in this browser only, ` +
+      `using about ${formatBytes(new Blob([snapshot]).size)} locally.`;
+    return;
+  }
+
   if (!appState.currentUser) {
     dom.storageStatus.textContent =
       "Sign in to sync your daily logs, workouts, and targets to Firestore. " +
@@ -863,19 +1133,52 @@ function updateNutritionPreview() {
   const protein = toNumberOrNull(dom.dailyForm.elements.protein.value);
   const carbPercent = toNumberOrNull(dom.dailyForm.elements.carbPercent.value);
   const fatPercent = toNumberOrNull(dom.dailyForm.elements.fatPercent.value);
+  const macroMode = dom.dailyForm.elements.macroMode.value;
 
-  const payload = buildMacroPayloadFromInputs(calories, protein, carbPercent, fatPercent, true);
+  const payload = buildMacroPayloadFromInputs(
+    calories,
+    protein,
+    carbPercent,
+    fatPercent,
+    macroMode,
+    true
+  );
 
   if (payload.error) {
     dom.macroPreview.innerHTML = `<strong>Check:</strong> ${escapeHtml(payload.error)}`;
     return;
   }
 
+  if (macroMode === "grams") {
+    const calculatedText = isNumber(payload.calculatedCalories)
+      ? `${Math.round(payload.calculatedCalories)} calories`
+      : "Enter grams";
+    const calorieText = isNumber(payload.calories)
+      ? `${Math.round(payload.calories)} calories`
+      : calculatedText;
+    const proteinShare = isNumber(payload.macroPercentages.protein)
+      ? `${payload.macroPercentages.protein.toFixed(1)}%`
+      : "-";
+    const carbsShare = isNumber(payload.macroPercentages.carbs)
+      ? `${payload.macroPercentages.carbs.toFixed(1)}%`
+      : "-";
+    const fatShare = isNumber(payload.macroPercentages.fat)
+      ? `${payload.macroPercentages.fat.toFixed(1)}%`
+      : "-";
+
+    dom.macroPreview.innerHTML = `
+      <strong>Nutrition preview</strong><br />
+      Gram math totals <strong>${calculatedText}</strong>. Saved calories will be
+      <strong>${calorieText}</strong>.<br />
+      Macro split: protein <strong>${proteinShare}</strong>, carbs <strong>${carbsShare}</strong>,
+      fat <strong>${fatShare}</strong>.
+    `;
+    return;
+  }
+
+  const proteinText = isNumber(payload.macros.protein) ? `${payload.macros.protein.toFixed(1)} g` : "Enter calories";
   const carbsText = isNumber(payload.macros.carbs) ? `${payload.macros.carbs.toFixed(1)} g` : "Enter calories";
   const fatText = isNumber(payload.macros.fat) ? `${payload.macros.fat.toFixed(1)} g` : "Enter calories";
-  const proteinShare = isNumber(payload.macroPercentages.protein)
-    ? `${payload.macroPercentages.protein.toFixed(1)}%`
-    : "Pending calories";
   const assignedText = isNumber(payload.assignedPercent)
     ? `${payload.assignedPercent.toFixed(1)}%`
     : "Not available";
@@ -885,10 +1188,35 @@ function updateNutritionPreview() {
 
   dom.macroPreview.innerHTML = `
     <strong>Nutrition preview</strong><br />
-    Carbs convert to <strong>${carbsText}</strong>, fat converts to <strong>${fatText}</strong>,
-    and protein represents <strong>${proteinShare}</strong> of your calorie intake.<br />
+    Protein converts to <strong>${proteinText}</strong>, carbs convert to <strong>${carbsText}</strong>,
+    and fat converts to <strong>${fatText}</strong>.<br />
     Assigned intake: <strong>${assignedText}</strong>. Remaining unassigned: <strong>${remainingText}</strong>.
   `;
+}
+
+function updateMacroInputMode() {
+  const isGrams = dom.dailyForm.elements.macroMode.value === "grams";
+  const proteinInput = dom.dailyForm.elements.protein;
+  const carbsInput = dom.dailyForm.elements.carbPercent;
+  const fatInput = dom.dailyForm.elements.fatPercent;
+
+  dom.dailyProteinLabel.textContent = isGrams ? "Protein (g)" : "Protein (%)";
+  dom.dailyCarbsLabel.textContent = isGrams ? "Carbs (g)" : "Carbs (%)";
+  dom.dailyFatLabel.textContent = isGrams ? "Fat (g)" : "Fat (%)";
+
+  proteinInput.placeholder = isGrams ? "180" : "30";
+  carbsInput.placeholder = isGrams ? "220" : "40";
+  fatInput.placeholder = isGrams ? "70" : "30";
+
+  [proteinInput, carbsInput, fatInput].forEach((input) => {
+    if (isGrams) {
+      input.removeAttribute("max");
+      input.step = "0.1";
+    } else {
+      input.max = "100";
+      input.step = "0.1";
+    }
+  });
 }
 
 function setSessionState(user) {
@@ -905,12 +1233,16 @@ function setSessionState(user) {
     return;
   }
 
-  dom.sessionLabel.textContent = `Signed in as ${getFriendlyUserName(user)}. Cloud sync is live.`;
+  dom.sessionLabel.textContent = appState.previewMode
+    ? `Offline preview is active for ${getFriendlyUserName(user)}.`
+    : `Signed in as ${getFriendlyUserName(user)}. Cloud sync is live.`;
   dom.profileShell.hidden = false;
   dom.profileTrigger.setAttribute("aria-expanded", "false");
   dom.profileMenu.hidden = true;
   dom.profileName.textContent = getFriendlyUserName(user);
-  dom.profileSubtitle.textContent = user.email || "My Profile";
+  dom.profileSubtitle.textContent = appState.previewMode
+    ? "Stored in this browser"
+    : user.email || "My Profile";
 
   if (user.photoURL) {
     dom.profileAvatarImage.src = user.photoURL;
@@ -956,9 +1288,57 @@ function setAuthPending(isPending) {
     dom.googleSigninButton,
     dom.emailSigninButton,
     dom.emailSignupButton,
+    dom.offlinePreviewButton,
   ].forEach((element) => {
     element.disabled = isPending;
   });
+}
+
+function configureOfflinePreviewUi() {
+  const isAvailable = shouldOfferOfflinePreview();
+  dom.offlinePreviewBlock.hidden = !isAvailable;
+
+  if (isAvailable) {
+    dom.offlinePreviewCopy.textContent =
+      "This local file preview cannot complete Firebase sign-in reliably. You can still open Health Ledger in offline preview mode and keep test data in this browser.";
+    setAuthFeedback(
+      "Use a local server for real Firebase sign-in, or continue in offline preview mode here.",
+      "error"
+    );
+  }
+}
+
+function shouldOfferOfflinePreview() {
+  return window.location.protocol === "file:" || !navigator.onLine;
+}
+
+async function handleOfflinePreviewStart() {
+  setAuthFeedback("");
+  setLoadingState(true, "Opening offline preview...", "Local Preview Mode");
+
+  try {
+    const previewState = readOfflinePreviewWorkspace();
+    appState.previewMode = true;
+    appState.currentUser = buildOfflinePreviewUser(previewState.profile);
+    appState.userSettings = normalizeUserSettings(previewState.userSettings);
+    appState.dailyLogs = (previewState.dailyLogs || [])
+      .map((log) => normalizeDailyLog(log))
+      .sort(sortByDateAsc);
+    appState.workoutLogs = (previewState.workoutLogs || [])
+      .map((log) => normalizeWorkoutLog(log))
+      .sort(sortByDateAsc);
+    appState.selectedWeekKey = getCurrentWeekKey();
+
+    setSessionState(appState.currentUser);
+    setAppLocked(false);
+    syncWorkspaceUiFromState();
+    showStatusMessage("Offline preview is active. Data will stay in this browser.");
+  } catch (error) {
+    console.error(error);
+    showStatusMessage("Unable to start offline preview in this browser.", true);
+  } finally {
+    setLoadingState(false);
+  }
 }
 
 function handleProfileTriggerClick(event) {
@@ -1041,6 +1421,7 @@ function populateAccountForm() {
   const user = appState.currentUser;
   dom.accountDisplayName.value = user?.displayName || "";
   dom.accountPhotoUrl.value = user?.photoURL || "";
+  dom.accountDeletePassword.value = "";
 }
 
 async function linkPendingGoogleCredential(user) {
@@ -1082,9 +1463,22 @@ function clearPendingGoogleLink() {
   appState.pendingLinkEmail = "";
 }
 
+function syncWorkspaceUiFromState() {
+  populateSettingsForm();
+  resetWorkoutForm();
+  populateDailyFormForDate(getLocalDateString());
+  renderHistoryTables();
+  renderStorageStatus();
+  refreshCurrentView(getActiveViewName());
+}
+
 function renderSignedOutState() {
   closeTransientUi();
-  clearDashboardPanels("Sign in to view your private dashboard and Firestore-backed trends.");
+  clearDashboardPanels(
+    shouldOfferOfflinePreview()
+      ? "Use a local server for Firebase sign-in, or continue with offline preview mode."
+      : "Sign in to view your private dashboard and Firestore-backed trends."
+  );
   renderHistoryTables();
   renderStorageStatus();
   populateSettingsForm();
@@ -1101,6 +1495,7 @@ function clearDashboardPanels(message) {
   dom.dashboardWeekTitle.textContent = "Week Overview";
   dom.dashboardWeekCaption.textContent = "Sign in to load your weekly charts.";
   dom.dashboardWeekSelect.innerHTML = `<option value="${getCurrentWeekKey()}">Current week</option>`;
+  renderQuickWaterProgress();
   dom.insightCards.innerHTML = "";
   dom.alertCards.innerHTML = `
     <article class="alert-card ok">
@@ -1237,7 +1632,7 @@ function renderDashboard() {
     return;
   }
 
-  dom.dashboardHeading.textContent = `Welcome back, ${getFriendlyUserName(appState.currentUser)}`;
+  dom.dashboardHeading.textContent = `Welcome back, ${getFriendlyUserName(appState.currentUser)}!`;
 
   const dailyLogs = appState.dailyLogs;
   const workoutLogs = appState.workoutLogs;
@@ -1262,9 +1657,9 @@ function renderDashboard() {
   const totalWorkouts = workoutsThisWeek.length;
 
   dom.dashboardSummary.textContent =
-    `Today is ${formatLongDate(new Date())}. Reviewing ${selectedWeek.label.toLowerCase()} with ` +
-    `${dailyLogsThisWeek.length} daily logs and ${workoutsThisWeek.length} workouts.`;
+    `Reviewing ${selectedWeek.label} with ${dailyLogsThisWeek.length} logs......`;
 
+  renderQuickWaterProgress();
   renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts);
   renderAlertCards(dailyLogs, selectedWeek, settings);
   renderWeightChart(dailyLogs, selectedWeek);
@@ -1294,6 +1689,18 @@ function syncWeekSelector(weekOptions) {
   dom.dashboardWeekCaption.textContent = `${selected.start} to ${selected.end}`;
 
   return selected;
+}
+
+function renderQuickWaterProgress() {
+  const todayLog = getExistingDailyLog(getLocalDateString());
+  const settings = appState.userSettings;
+  const glasses = toNumberOrNull(todayLog?.water?.glasses) ?? 0;
+  const targetGlasses =
+    toNumberOrNull(todayLog?.water?.targetGlasses) ?? settings.waterTargetGlasses;
+
+  dom.quickWaterProgress.textContent =
+    `${formatNumberForDisplay(glasses)} / ${formatNumberForDisplay(targetGlasses)} Glasses`;
+  dom.quickWaterButton.disabled = !appState.currentUser;
 }
 
 function renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts) {
@@ -1966,63 +2373,120 @@ function cloneDefaultSettings() {
   return clonePlainData(DEFAULT_SETTINGS);
 }
 
-function buildMacroPayloadFromInputs(calories, proteinGrams, carbPercent, fatPercent, isPreview = false) {
+function buildMacroPayloadFromInputs(
+  calories,
+  proteinInput,
+  carbInput,
+  fatInput,
+  macroMode = "percentage",
+  isPreview = false
+) {
   const hasCalories = isNumber(calories) && calories > 0;
-  const hasCarbPercent = isNumber(carbPercent);
-  const hasFatPercent = isNumber(fatPercent);
-  const hasProtein = isNumber(proteinGrams);
+  const hasProtein = isNumber(proteinInput);
+  const hasCarbs = isNumber(carbInput);
+  const hasFat = isNumber(fatInput);
+  const hasAnyMacro = hasProtein || hasCarbs || hasFat;
+  const hasAllMacros = hasProtein && hasCarbs && hasFat;
 
-  if ((hasCarbPercent || hasFatPercent) && !hasCalories) {
+  if (!hasAnyMacro) {
+    return {
+      calories: hasCalories ? calories : null,
+      macros: { protein: null, carbs: null, fat: null },
+      macroPercentages: { protein: null, carbs: null, fat: null },
+      assignedPercent: null,
+      remainingPercent: null,
+    };
+  }
+
+  if (!hasAllMacros) {
     return {
       error: isPreview
-        ? "Enter calories to convert carb and fat percentages."
-        : "Please enter calories before using carb or fat percentages.",
+        ? "Enter protein, carbs, and fat to validate macro math."
+        : "Please enter protein, carbs, and fat before saving macros.",
+    };
+  }
+
+  if ([proteinInput, carbInput, fatInput].some((value) => value < 0)) {
+    return {
+      error: "Macro values cannot be negative.",
+    };
+  }
+
+  if (macroMode === "grams") {
+    const calculatedCalories = calculateMacroCaloriesFromGrams({
+      protein: proteinInput,
+      carbs: carbInput,
+      fat: fatInput,
+    });
+    const resolvedCalories = hasCalories ? calories : Math.round(calculatedCalories);
+
+    if (hasCalories && Math.abs(calories - calculatedCalories) > MACRO_CALORIE_MARGIN) {
+      return {
+        error:
+          `Macro grams calculate to ${Math.round(calculatedCalories)} calories ` +
+          `(protein ${proteinInput}g x 4 + carbs ${carbInput}g x 4 + fat ${fatInput}g x 9), ` +
+          `but Total Calories is ${Math.round(calories)}. Adjust calories or macros before saving.`,
+      };
+    }
+
+    return {
+      calories: resolvedCalories,
+      macros: {
+        protein: proteinInput,
+        carbs: carbInput,
+        fat: fatInput,
+      },
+      macroPercentages: deriveMacroPercentages(resolvedCalories, {
+        protein: proteinInput,
+        carbs: carbInput,
+        fat: fatInput,
+      }),
+      assignedPercent: hasCalories ? roundToOneDecimal((calculatedCalories / calories) * 100) : 100,
+      remainingPercent: hasCalories ? roundToOneDecimal(100 - (calculatedCalories / calories) * 100) : 0,
+      calculatedCalories,
+      autoCalculatedCalories: !hasCalories,
+    };
+  }
+
+  const assignedPercent = proteinInput + carbInput + fatInput;
+
+  if (Math.abs(assignedPercent - 100) > 0.01) {
+    return {
+      error: `Macro percentages must add up to exactly 100%. Current total: ${roundToOneDecimal(assignedPercent)}%.`,
+    };
+  }
+
+  if (!hasCalories) {
+    return {
+      error: isPreview
+        ? "Enter calories to convert macro percentages."
+        : "Please enter total calories before saving percentage-based macros.",
     };
   }
 
   const macros = {
-    protein: hasProtein ? proteinGrams : null,
-    carbs: null,
-    fat: null,
+    protein: roundToOneDecimal(((calories * proteinInput) / 100) / 4),
+    carbs: roundToOneDecimal(((calories * carbInput) / 100) / 4),
+    fat: roundToOneDecimal(((calories * fatInput) / 100) / 9),
   };
 
   const macroPercentages = {
-    protein: null,
-    carbs: hasCarbPercent ? carbPercent : null,
-    fat: hasFatPercent ? fatPercent : null,
+    protein: proteinInput,
+    carbs: carbInput,
+    fat: fatInput,
   };
 
-  if (hasCalories && hasCarbPercent) {
-    macros.carbs = roundToOneDecimal(((calories * carbPercent) / 100) / 4);
-  }
-
-  if (hasCalories && hasFatPercent) {
-    macros.fat = roundToOneDecimal(((calories * fatPercent) / 100) / 9);
-  }
-
-  if (hasCalories && hasProtein) {
-    macroPercentages.protein = roundToOneDecimal(((proteinGrams * 4) / calories) * 100);
-  }
-
-  const assignedPercent = [macroPercentages.protein, macroPercentages.carbs, macroPercentages.fat]
-    .filter(isNumber)
-    .reduce((sum, value) => sum + value, 0);
-  const remainingPercent = isNumber(assignedPercent) ? roundToOneDecimal(100 - assignedPercent) : null;
-
-  if (assignedPercent > 100.1) {
-    return {
-      error: isPreview
-        ? "Macro percentages currently add up to more than 100%."
-        : "Those macro values exceed 100% of your calories. Adjust protein, carbs, or fat.",
-    };
-  }
-
   return {
+    calories,
     macros,
     macroPercentages,
     assignedPercent: roundToOneDecimal(assignedPercent),
-    remainingPercent,
+    remainingPercent: roundToOneDecimal(100 - assignedPercent),
   };
+}
+
+function calculateMacroCaloriesFromGrams(macros) {
+  return (macros.protein * 4) + (macros.carbs * 4) + (macros.fat * 9);
 }
 
 function deriveMacroPercentages(calories, macros) {
@@ -2295,6 +2759,64 @@ function getMacroCaloriesBreakdown(log) {
   };
 }
 
+function buildOfflinePreviewUser(profile = {}) {
+  return {
+    uid: "offline-preview",
+    displayName: profile.displayName?.trim() || "Offline Preview",
+    email: profile.email || "preview@health-ledger.local",
+    photoURL: profile.photoURL || "",
+  };
+}
+
+function readOfflinePreviewWorkspace() {
+  try {
+    const rawValue = localStorage.getItem(OFFLINE_PREVIEW_STORAGE_KEY);
+    const parsed = rawValue ? JSON.parse(rawValue) : {};
+    return {
+      userSettings: normalizeUserSettings(parsed.userSettings || DEFAULT_SETTINGS),
+      dailyLogs: Array.isArray(parsed.dailyLogs) ? parsed.dailyLogs : [],
+      workoutLogs: Array.isArray(parsed.workoutLogs) ? parsed.workoutLogs : [],
+      profile: parsed.profile || {},
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      userSettings: cloneDefaultSettings(),
+      dailyLogs: [],
+      workoutLogs: [],
+      profile: {},
+    };
+  }
+}
+
+function persistOfflinePreviewWorkspace() {
+  if (!appState.previewMode) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(
+      OFFLINE_PREVIEW_STORAGE_KEY,
+      JSON.stringify({
+        userSettings: appState.userSettings,
+        dailyLogs: appState.dailyLogs,
+        workoutLogs: appState.workoutLogs,
+        profile: {
+          displayName: appState.currentUser?.displayName || "Offline Preview",
+          email: appState.currentUser?.email || "preview@health-ledger.local",
+          photoURL: appState.currentUser?.photoURL || "",
+        },
+      })
+    );
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function generateOfflineId() {
+  return globalThis.crypto?.randomUUID?.() || `offline-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
 function getFriendlyUserName(user) {
   return user.displayName?.trim() || user.email?.split("@")[0] || "there";
 }
@@ -2380,6 +2902,14 @@ function isNumber(value) {
 
 function formatMaybeNumber(value) {
   return isNumber(value) ? escapeHtml(String(value)) : "-";
+}
+
+function formatNumberForDisplay(value) {
+  if (!isNumber(value)) {
+    return "0";
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function formatMacroHistory(log) {

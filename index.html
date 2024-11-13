@@ -124,6 +124,17 @@
             </label>
           </article>
 
+          <article class="panel quick-water-panel">
+            <div class="quick-water-copy">
+              <span class="toolbar-label">Water Tracking</span>
+              <h3>Today&apos;s Water</h3>
+              <p id="quick-water-progress" class="helper-text">0 / 8 Glasses</p>
+            </div>
+            <button type="button" id="quick-water-button" class="primary-button quick-water-button">
+              +1 Glass
+            </button>
+          </article>
+
           <div class="stats-grid" id="insight-cards"></div>
           <div class="alerts-grid" id="alert-cards"></div>
 
@@ -192,8 +203,7 @@
               <h2 id="entry-heading">Data Entry</h2>
             </div>
             <p class="section-copy">
-              Protein is logged in grams. Carbs and fat are entered as a share of
-              daily intake and converted for storage automatically.
+              Log macros as percentages or grams with calorie math checked before saving.
             </p>
           </div>
 
@@ -217,16 +227,23 @@
                   <span>Calories</span>
                   <input type="number" id="daily-calories" name="calories" min="0" placeholder="2300" />
                 </label>
+                <label class="full-width">
+                  <span>Macro Input</span>
+                  <select id="daily-macro-mode" name="macroMode">
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="grams">Grams (g)</option>
+                  </select>
+                </label>
                 <label>
-                  <span>Protein (g)</span>
+                  <span id="daily-protein-label">Protein (%)</span>
                   <input type="number" id="daily-protein" name="protein" min="0" placeholder="180" />
                 </label>
                 <label>
-                  <span>Carbs (% of intake)</span>
+                  <span id="daily-carbs-label">Carbs (%)</span>
                   <input type="number" id="daily-carbs-percent" name="carbPercent" min="0" max="100" step="0.1" placeholder="40" />
                 </label>
                 <label>
-                  <span>Fat (% of intake)</span>
+                  <span id="daily-fat-label">Fat (%)</span>
                   <input type="number" id="daily-fat-percent" name="fatPercent" min="0" max="100" step="0.1" placeholder="30" />
                 </label>
 
@@ -403,6 +420,12 @@
           </div>
         </section>
       </main>
+
+      <footer class="site-footer" aria-label="Site footer">
+        <span class="site-footer-left">Copyright &copy; 2024</span>
+        <span class="site-footer-center">Base Version 1.1</span>
+        <span class="site-footer-right">Property of Sidakpreet Singh</span>
+      </footer>
     </div>
 
     <div id="app-loading" class="app-loading" role="status" aria-live="polite">
@@ -475,6 +498,15 @@
           </form>
 
           <p id="auth-feedback" class="auth-feedback" aria-live="polite"></p>
+
+          <div id="offline-preview-block" class="auth-preview-block" hidden>
+            <p id="offline-preview-copy" class="helper-text auth-preview-copy">
+              Local file previews cannot complete Firebase sign-in reliably. You can still open the app in offline preview mode and store test data in this browser.
+            </p>
+            <button type="button" id="offline-preview-button" class="secondary-button auth-preview-button">
+              Continue in Offline Preview
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -527,6 +559,27 @@
             <button type="submit" class="primary-button">Save Account</button>
           </div>
         </form>
+
+        <div class="danger-zone">
+          <div>
+            <h4>Delete Account</h4>
+            <p class="helper-text">
+              Permanently removes your Health Ledger profile, daily logs, workouts, settings, and sign-in.
+            </p>
+          </div>
+          <label>
+            <span>Current Password</span>
+            <input
+              type="password"
+              id="account-delete-password"
+              autocomplete="current-password"
+              placeholder="Required for email/password accounts"
+            />
+          </label>
+          <button type="button" id="account-delete-button" class="danger-button">
+            Delete Account
+          </button>
+        </div>
       </div>
     </div>
 
@@ -579,14 +632,24 @@
             <span>Fat % Target</span>
             <input type="number" id="settings-macro-fat" name="fatTarget" min="0" max="100" required />
           </label>
-          <label>
-            <span>Default Water Target (glasses)</span>
-            <input type="number" id="settings-water-target" name="waterTargetGlasses" min="0" step="0.1" required />
-          </label>
-          <label>
-            <span>Default Glass Size (ml)</span>
-            <input type="number" id="settings-water-unit" name="waterUnitAmountMl" min="0" step="1" required />
-          </label>
+          <div class="nested-section full-width preference-section">
+            <div class="nested-header">
+              <div>
+                <h4>Water Tracking</h4>
+                <p>Set the glass size and daily goal used by the dashboard quick add.</p>
+              </div>
+            </div>
+            <div class="preference-grid">
+              <label>
+                <span>Glass Size (ml)</span>
+                <input type="number" id="settings-water-unit" name="waterUnitAmountMl" min="0" step="1" required />
+              </label>
+              <label>
+                <span>Daily Goal</span>
+                <input type="number" id="settings-water-target" name="waterTargetGlasses" min="0" step="0.1" required />
+              </label>
+            </div>
+          </div>
 
           <div class="utility-actions full-width">
             <button type="button" id="preferences-modal-cancel" class="secondary-button">Cancel</button>
