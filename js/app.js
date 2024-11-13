@@ -28,12 +28,12 @@ import {
 */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBtAMODIAqiGBho6tnr9OnhEAGtyXo5TIs",
-  authDomain: "health-ledger-6ddb7.firebaseapp.com",
-  projectId: "health-ledger-6ddb7",
-  storageBucket: "health-ledger-6ddb7.firebasestorage.app",
-  messagingSenderId: "833373625851",
-  appId: "1:833373625851:web:98c565f27a7c3d0affff5e",
+  apiKey: "AIzaSyAakyAhWSKdvEEGjCoDvXdzDwGxx4_yfm8",
+  authDomain: "sps-health-ledger.firebaseapp.com",
+  projectId: "sps-health-ledger",
+  storageBucket: "sps-health-ledger.firebasestorage.app",
+  messagingSenderId: "652885909913",
+  appId: "1:652885909913:web:76c9acfd596e9d102c7308",
 };
 
 const firebaseApp = initializeApp(firebaseConfig);

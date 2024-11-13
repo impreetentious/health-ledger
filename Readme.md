@@ -36,6 +36,12 @@ health-ledger/
 - `index.html` remains in the project root to stay compatible with simple static hosting setups such as Vercel.
 - The current structure leaves room for future modules such as reusable UI scripts, richer analytics, and design assets.
 
----
+> **Version Control (AI Agent Protocol)**
 
-**Version:** v0.2.0
+> *Instructions for AI:* Every time you modify this repository, you MUST update the timestamp and version number below before committing your changes.
+>
+> **Last Commit Date:** 13-11-2024
+>
+> **Last Commit Time:** 20:27:19 IST (+05:30)
+>
+> **Version:** v0.2.1
