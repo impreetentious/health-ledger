@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fitness Ledger</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-left"></div>
+    <div class="ambient ambient-right"></div>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="hero-copy">
+          <h1>Fitness Ledger</h1>
+          <p class="hero-kicker">Log the work. Let the trendline speak.</p>
+        </div>
+
+        <div class="topbar-aside">
+          <article class="quote-card" aria-live="polite">
+            <span class="quote-label">Today&apos;s line</span>
+            <p id="daily-quote-text" class="quote-text"></p>
+            <p id="daily-quote-source" class="quote-source"></p>
+          </article>
+
+          <nav class="main-nav" aria-label="Primary">
+            <button class="nav-button active" data-view="dashboard">Dashboard</button>
+            <button class="nav-button" data-view="entry">Data Entry</button>
+            <button class="nav-button" data-view="history">History &amp; Settings</button>
+          </nav>
+        </div>
+      </header>
+
+      <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+
+      <main class="view-stack">
+        <section id="dashboard-view" class="view active" aria-labelledby="dashboard-heading">
+          <div class="section-heading">
+            <div>
+              <h2 id="dashboard-heading">Progress Dashboard</h2>
+            </div>
+            <p id="dashboard-summary" class="section-copy"></p>
+          </div>
+
+          <article class="panel dashboard-toolbar">
+            <div class="toolbar-copy">
+              <span id="dashboard-today" class="toolbar-label"></span>
+              <h3 id="dashboard-week-title">Week Overview</h3>
+              <p id="dashboard-week-caption" class="helper-text"></p>
+            </div>
+
+            <label class="toolbar-select">
+              <span>Review Week</span>
+              <select id="dashboard-week-select" aria-label="Select a week to review"></select>
+            </label>
+          </article>
+
+          <div class="stats-grid" id="insight-cards"></div>
+          <div class="alerts-grid" id="alert-cards"></div>
+
+          <div class="chart-grid">
+            <article class="panel chart-panel wide">
+              <div class="panel-header">
+                <h3>Weight Trend</h3>
+                <p>Daily weigh-ins inside the selected week with a rolling 7-day average.</p>
+              </div>
+              <canvas id="weightChart" aria-label="Weight trend chart"></canvas>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-header">
+                <h3>Macro Split</h3>
+                <p>Weekly actual split compared with your saved target.</p>
+              </div>
+              <canvas id="macroChart" aria-label="Macro split chart"></canvas>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-header">
+                <h3>Calories vs Target</h3>
+                <p>Daily intake against your calorie target.</p>
+              </div>
+              <canvas id="calorieChart" aria-label="Calorie chart"></canvas>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-header">
+                <h3>Protein vs Target</h3>
+                <p>Daily protein intake against your gram target.</p>
+              </div>
+              <canvas id="proteinChart" aria-label="Protein chart"></canvas>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-header">
+                <h3>Steps This Week</h3>
+                <p>Daily steps with the weekly average line.</p>
+              </div>
+              <canvas id="stepsChart" aria-label="Steps chart"></canvas>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-header">
+                <h3>Water vs Target</h3>
+                <p>Daily water intake compared with your target, shown in liters.</p>
+              </div>
+              <canvas id="waterChart" aria-label="Water chart"></canvas>
+            </article>
+
+            <article class="panel chart-panel wide">
+              <div class="panel-header">
+                <h3>Training Volume</h3>
+                <p>Total weekly sets grouped by muscle group.</p>
+              </div>
+              <canvas id="volumeChart" aria-label="Training volume chart"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <section id="entry-view" class="view" aria-labelledby="entry-heading">
+          <div class="section-heading">
+            <div>
+              <h2 id="entry-heading">Data Entry</h2>
+            </div>
+            <p class="section-copy">
+              Protein is logged in grams. Carbs and fat are entered as a share of
+              daily intake and converted for storage automatically.
+            </p>
+          </div>
+
+          <div class="entry-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Daily Log</h3>
+                <p>Track recovery, weight, calories, protein, steps, and water in one place.</p>
+              </div>
+
+              <form id="daily-log-form" class="form-grid">
+                <label>
+                  <span>Date</span>
+                  <input type="date" id="daily-date" name="date" required />
+                </label>
+                <label>
+                  <span>Weight</span>
+                  <input type="number" id="daily-weight" name="weight" step="0.1" min="0" placeholder="72.4" />
+                </label>
+                <label>
+                  <span>Calories</span>
+                  <input type="number" id="daily-calories" name="calories" min="0" placeholder="2300" />
+                </label>
+                <label>
+                  <span>Protein (g)</span>
+                  <input type="number" id="daily-protein" name="protein" min="0" placeholder="180" />
+                </label>
+                <label>
+                  <span>Carbs (% of intake)</span>
+                  <input type="number" id="daily-carbs-percent" name="carbPercent" min="0" max="100" step="0.1" placeholder="40" />
+                </label>
+                <label>
+                  <span>Fat (% of intake)</span>
+                  <input type="number" id="daily-fat-percent" name="fatPercent" min="0" max="100" step="0.1" placeholder="30" />
+                </label>
+
+                <div id="macro-preview" class="macro-preview full-width"></div>
+
+                <label>
+                  <span>Steps</span>
+                  <input type="number" id="daily-steps" name="steps" min="0" placeholder="9000" />
+                </label>
+                <label>
+                  <span>Sleep (hours)</span>
+                  <input type="number" id="daily-sleep" name="sleep" min="0" step="0.1" placeholder="7.5" />
+                </label>
+                <label>
+                  <span>Water (glasses)</span>
+                  <input type="number" id="daily-water-glasses" name="waterGlasses" min="0" step="0.1" placeholder="8" />
+                </label>
+                <label>
+                  <span>Water Target (glasses)</span>
+                  <input type="number" id="daily-water-target" name="waterTargetGlasses" min="0" step="0.1" placeholder="8" />
+                </label>
+                <label>
+                  <span>Glass Size (ml)</span>
+                  <input type="number" id="daily-water-unit" name="waterUnitAmountMl" min="0" step="1" placeholder="250" />
+                </label>
+                <label>
+                  <span>Energy (1-5)</span>
+                  <select id="daily-energy" name="energy">
+                    <option value="">Select</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                </label>
+                <label class="full-width">
+                  <span>Notes</span>
+                  <textarea id="daily-notes" name="notes" rows="4" placeholder="Recovery notes, appetite, stress, training readiness..."></textarea>
+                </label>
+
+                <button type="submit" class="primary-button full-width">Save Daily Log</button>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Workout Log</h3>
+                <p>Build a full session with multiple exercises and sets.</p>
+              </div>
+
+              <form id="workout-log-form" class="form-grid">
+                <label>
+                  <span>Date</span>
+                  <input type="date" id="workout-date" name="date" required />
+                </label>
+                <label>
+                  <span>Session Type</span>
+                  <input type="text" id="workout-session-type" name="session_type" placeholder="Upper Body" required />
+                </label>
+                <label>
+                  <span>Duration (minutes)</span>
+                  <input type="number" id="workout-duration" name="duration" min="0" placeholder="75" required />
+                </label>
+
+                <div class="full-width nested-section">
+                  <div class="nested-header">
+                    <div>
+                      <h4>Exercises</h4>
+                      <p>Add exercises and set details for the session.</p>
+                    </div>
+                    <button type="button" id="add-exercise-button" class="secondary-button">Add Exercise</button>
+                  </div>
+                  <div id="exercise-list" class="exercise-list"></div>
+                </div>
+
+                <button type="submit" class="primary-button full-width">Save Workout Log</button>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section id="history-view" class="view" aria-labelledby="history-heading">
+          <div class="section-heading">
+            <div>
+              <h2 id="history-heading">History &amp; Settings</h2>
+            </div>
+            <p class="section-copy">
+              Review past entries, adjust targets, and keep your ledger backed up.
+            </p>
+          </div>
+
+          <div class="history-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Targets</h3>
+                <p>These settings drive the weekly charts.</p>
+              </div>
+
+              <form id="settings-form" class="form-grid">
+                <label>
+                  <span>Daily Calorie Target</span>
+                  <input type="number" id="settings-calories" name="calorieTarget" min="0" required />
+                </label>
+                <label>
+                  <span>Daily Protein Target (g)</span>
+                  <input type="number" id="settings-protein-grams" name="proteinGramTarget" min="0" required />
+                </label>
+                <label>
+                  <span>Protein % Target</span>
+                  <input type="number" id="settings-macro-protein" name="proteinTarget" min="0" max="100" required />
+                </label>
+                <label>
+                  <span>Carbs % Target</span>
+                  <input type="number" id="settings-macro-carbs" name="carbsTarget" min="0" max="100" required />
+                </label>
+                <label>
+                  <span>Fat % Target</span>
+                  <input type="number" id="settings-macro-fat" name="fatTarget" min="0" max="100" required />
+                </label>
+                <label>
+                  <span>Default Water Target (glasses)</span>
+                  <input type="number" id="settings-water-target" name="waterTargetGlasses" min="0" step="0.1" required />
+                </label>
+                <label>
+                  <span>Default Glass Size (ml)</span>
+                  <input type="number" id="settings-water-unit" name="waterUnitAmountMl" min="0" step="1" required />
+                </label>
+
+                <button type="submit" class="primary-button full-width">Save Settings</button>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Legacy Data Importer</h3>
+                <p>
+                  Upload a CSV with columns:
+                  <strong>Date, Weight, Calories, Protein, Carbs, Fat</strong>.
+                </p>
+              </div>
+
+              <div class="importer">
+                <input type="file" id="csv-import" accept=".csv,text/csv" />
+                <p class="helper-text">
+                  Imported rows merge by date so existing steps, sleep, water,
+                  notes, and workout data stay intact.
+                </p>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Backup Vault</h3>
+                <p>Keep a portable copy you can archive to Google Drive anytime.</p>
+              </div>
+
+              <div class="backup-block">
+                <p id="storage-status" class="helper-text"></p>
+                <button type="button" id="export-backup-button" class="primary-button">
+                  Export Full Backup
+                </button>
+              </div>
+            </article>
+          </div>
+
+          <div class="table-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Daily Log History</h3>
+                <p>Newest entries first.</p>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Weight</th>
+                      <th>Calories</th>
+                      <th>Protein</th>
+                      <th>Macro Log</th>
+                      <th>Steps</th>
+                      <th>Water</th>
+                      <th>Sleep</th>
+                      <th>Energy</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody id="daily-history-body"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <h3>Workout History</h3>
+                <p>Recent sessions with exercise totals.</p>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Session</th>
+                      <th>Duration</th>
+                      <th>Exercises</th>
+                      <th>Total Sets</th>
+                    </tr>
+                  </thead>
+                  <tbody id="workout-history-body"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
