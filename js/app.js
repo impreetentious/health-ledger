@@ -1,16 +1,49 @@
 "use strict";
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import {
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
 /*
-  Fitness Ledger
+  Health Ledger
   ---------------------------------------------------------------------------
-  localStorage access is isolated so this can be swapped for Firestore later.
+  Firebase Auth and Firestore now back the app so each user's data stays
+  scoped to their own account.
 */
 
-const STORAGE_KEYS = {
-  dailyLogs: "fitnessLedger.dailyLogs",
-  workoutLogs: "fitnessLedger.workoutLogs",
-  userSettings: "fitnessLedger.userSettings",
+const firebaseConfig = {
+  apiKey: "AIzaSyBtAMODIAqiGBho6tnr9OnhEAGtyXo5TIs",
+  authDomain: "health-ledger-6ddb7.firebaseapp.com",
+  projectId: "health-ledger-6ddb7",
+  storageBucket: "health-ledger-6ddb7.firebasestorage.app",
+  messagingSenderId: "833373625851",
+  appId: "1:833373625851:web:98c565f27a7c3d0affff5e",
 };
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+
+googleProvider.setCustomParameters({
+  prompt: "select_account",
+});
 
 const DEFAULT_SETTINGS = {
   calorieTarget: 2300,
@@ -46,31 +79,39 @@ const chartInstances = {
 };
 
 const appState = {
+  currentUser: null,
   selectedWeekKey: getCurrentWeekKey(),
+  dailyLogs: [],
+  workoutLogs: [],
+  userSettings: cloneDefaultSettings(),
+  authPending: false,
 };
 
 const dom = {};
 
-document.addEventListener("DOMContentLoaded", initializeApp);
+document.addEventListener("DOMContentLoaded", initializeInterface);
 
-function initializeApp() {
+function initializeInterface() {
   cacheDomReferences();
-  initializeStorage();
   bindEvents();
-  populateSettingsForm();
   seedFormDates();
   resetWorkoutForm();
   setDailyQuote();
-  populateDailyFormForDate(getLocalDateString());
-  renderHistoryTables();
-  renderStorageStatus();
-  refreshCurrentView("dashboard");
+  setAppLocked(true);
+  renderSignedOutState();
+  setLoadingState(true, "Checking your secure session...");
+
+  onAuthStateChanged(auth, async (user) => {
+    await handleAuthStateChange(user);
+  });
 }
 
 function cacheDomReferences() {
   dom.navButtons = document.querySelectorAll(".nav-button");
   dom.views = document.querySelectorAll(".view");
   dom.statusMessage = document.getElementById("status-message");
+  dom.sessionLabel = document.getElementById("session-label");
+  dom.logoutButton = document.getElementById("logout-button");
 
   dom.dailyQuoteText = document.getElementById("daily-quote-text");
   dom.dailyQuoteSource = document.getElementById("daily-quote-source");
@@ -104,6 +145,18 @@ function cacheDomReferences() {
   dom.waterChart = document.getElementById("waterChart");
   dom.macroChart = document.getElementById("macroChart");
   dom.volumeChart = document.getElementById("volumeChart");
+
+  dom.authOverlay = document.getElementById("auth-overlay");
+  dom.authForm = document.getElementById("auth-form");
+  dom.authEmail = document.getElementById("auth-email");
+  dom.authPassword = document.getElementById("auth-password");
+  dom.googleSigninButton = document.getElementById("google-signin-button");
+  dom.emailSigninButton = document.getElementById("email-signin-button");
+  dom.emailSignupButton = document.getElementById("email-signup-button");
+  dom.authFeedback = document.getElementById("auth-feedback");
+
+  dom.loadingOverlay = document.getElementById("app-loading");
+  dom.loadingCopy = document.getElementById("loading-copy");
 }
 
 function bindEvents() {
@@ -129,118 +182,227 @@ function bindEvents() {
   dom.csvImport.addEventListener("change", handleCsvImport);
   dom.exportBackupButton.addEventListener("click", handleBackupExport);
   dom.addExerciseButton.addEventListener("click", () => addExerciseCard());
+
+  dom.googleSigninButton.addEventListener("click", handleGoogleSignIn);
+  dom.authForm.addEventListener("submit", handleEmailSignIn);
+  dom.emailSignupButton.addEventListener("click", handleEmailSignUp);
+  dom.logoutButton.addEventListener("click", handleLogout);
 }
 
 /*
   ---------------------------------------------------------------------------
-  localStorage data access layer
+  Firebase auth and Firestore
   ---------------------------------------------------------------------------
 */
 
-function initializeStorage() {
-  if (!localStorage.getItem(STORAGE_KEYS.dailyLogs)) {
-    writeToStorage(STORAGE_KEYS.dailyLogs, []);
+async function handleAuthStateChange(user) {
+  const hadUser = Boolean(appState.currentUser);
+  clearStatusMessage();
+  setAuthPending(false);
+
+  if (!user) {
+    appState.currentUser = null;
+    clearUserDataState();
+    renderSignedOutState();
+    setSessionState(null);
+    setLoadingState(false);
+    setAppLocked(true);
+    setAuthFeedback("Sign in to load your private dashboard and cloud data.");
+    dom.authForm.reset();
+    if (hadUser) {
+      showStatusMessage("You signed out of Health Ledger.");
+    }
+    return;
   }
 
-  if (!localStorage.getItem(STORAGE_KEYS.workoutLogs)) {
-    writeToStorage(STORAGE_KEYS.workoutLogs, []);
-  }
+  appState.currentUser = user;
+  setSessionState(user);
+  setAppLocked(false);
+  setAuthFeedback("");
+  setLoadingState(true, "Loading your private ledger...");
 
-  initializeUserSettings();
-}
-
-function initializeUserSettings() {
-  const existing = readFromStorage(STORAGE_KEYS.userSettings, null);
-  const mergedSettings = {
-    calorieTarget: existing?.calorieTarget ?? DEFAULT_SETTINGS.calorieTarget,
-    proteinGramTarget: existing?.proteinGramTarget ?? DEFAULT_SETTINGS.proteinGramTarget,
-    macroTarget: {
-      protein: existing?.macroTarget?.protein ?? DEFAULT_SETTINGS.macroTarget.protein,
-      carbs: existing?.macroTarget?.carbs ?? DEFAULT_SETTINGS.macroTarget.carbs,
-      fat: existing?.macroTarget?.fat ?? DEFAULT_SETTINGS.macroTarget.fat,
-    },
-    waterTargetGlasses: existing?.waterTargetGlasses ?? DEFAULT_SETTINGS.waterTargetGlasses,
-    waterUnitAmountMl: existing?.waterUnitAmountMl ?? DEFAULT_SETTINGS.waterUnitAmountMl,
-  };
-
-  saveUserSettings(mergedSettings);
-}
-
-function readFromStorage(storageKey, fallbackValue) {
   try {
-    const rawValue = localStorage.getItem(storageKey);
-    return rawValue ? JSON.parse(rawValue) : fallbackValue;
+    await ensureUserProfile(user);
+    await hydrateUserWorkspace(user.uid);
+    dom.authForm.reset();
+    showStatusMessage(`Welcome back, ${getFriendlyUserName(user)}.`);
   } catch (error) {
-    console.error(`Unable to read storage key: ${storageKey}`, error);
-    return fallbackValue;
+    console.error(error);
+    clearUserDataState();
+    renderSignedOutState();
+    setAppLocked(true);
+    setAuthFeedback("We couldn't load your data right now. Please try signing in again.", "error");
+    showStatusMessage(
+      "Unable to load your Firestore data. Check Firebase Auth, Firestore, and security rules.",
+      true
+    );
+  } finally {
+    setLoadingState(false);
   }
 }
 
-function writeToStorage(storageKey, value) {
-  localStorage.setItem(storageKey, JSON.stringify(value));
+async function handleGoogleSignIn() {
+  setAuthFeedback("");
+  setAuthPending(true);
+
+  try {
+    await signInWithPopup(auth, googleProvider);
+    setAuthFeedback("Google sign-in worked. Pulling your data now...", "success");
+  } catch (error) {
+    console.error(error);
+    setAuthFeedback(formatFirebaseError(error), "error");
+  } finally {
+    setAuthPending(false);
+  }
 }
 
-function getDailyLogs() {
-  return readFromStorage(STORAGE_KEYS.dailyLogs, [])
-    .map(normalizeDailyLog)
-    .sort(sortByDateAsc);
+async function handleEmailSignIn(event) {
+  event.preventDefault();
+  await submitEmailAuth("signin");
 }
 
-function saveAllDailyLogs(dailyLogs) {
-  writeToStorage(
-    STORAGE_KEYS.dailyLogs,
-    dedupeLogsByDate(dailyLogs.map(normalizeDailyLog)).sort(sortByDateAsc)
-  );
+async function handleEmailSignUp() {
+  await submitEmailAuth("signup");
 }
 
-function saveDailyLog(dailyLog) {
-  const logs = getDailyLogs();
-  const existingIndex = logs.findIndex((log) => log.date === dailyLog.date);
+async function submitEmailAuth(mode) {
+  const email = dom.authEmail.value.trim();
+  const password = dom.authPassword.value;
 
-  if (existingIndex >= 0) {
-    logs[existingIndex] = mergeDailyLogs(logs[existingIndex], dailyLog);
+  if (!email || !password) {
+    setAuthFeedback("Enter both an email address and password.", "error");
+    return;
+  }
+
+  setAuthFeedback("");
+  setAuthPending(true);
+
+  try {
+    if (mode === "signup") {
+      await createUserWithEmailAndPassword(auth, email, password);
+      setAuthFeedback("Account created. Loading your new workspace...", "success");
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      setAuthFeedback("Signed in. Loading your workspace...", "success");
+    }
+  } catch (error) {
+    console.error(error);
+    setAuthFeedback(formatFirebaseError(error), "error");
+  } finally {
+    setAuthPending(false);
+  }
+}
+
+async function handleLogout() {
+  setLoadingState(true, "Signing you out...");
+
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error(error);
+    setLoadingState(false);
+    showStatusMessage(formatFirebaseError(error), true);
+  }
+}
+
+async function hydrateUserWorkspace(uid) {
+  const [settingsSnapshot, dailyLogsSnapshot, workoutLogsSnapshot] = await Promise.all([
+    getDoc(getUserSettingsDoc(uid)),
+    getDocs(getUserDailyLogsCollection(uid)),
+    getDocs(getUserWorkoutLogsCollection(uid)),
+  ]);
+
+  let settings = cloneDefaultSettings();
+
+  if (settingsSnapshot.exists()) {
+    settings = normalizeUserSettings(settingsSnapshot.data());
   } else {
-    logs.push(mergeDailyLogs(createEmptyDailyLog(dailyLog.date), dailyLog));
+    await setDoc(getUserSettingsDoc(uid), clonePlainData(settings), { merge: true });
   }
 
-  saveAllDailyLogs(logs);
+  appState.userSettings = settings;
+  appState.dailyLogs = dailyLogsSnapshot.docs
+    .map((snapshot) => normalizeDailyLog({ id: snapshot.id, ...snapshot.data() }))
+    .sort(sortByDateAsc);
+  appState.workoutLogs = workoutLogsSnapshot.docs
+    .map((snapshot) => normalizeWorkoutLog({ id: snapshot.id, ...snapshot.data() }))
+    .sort(sortByDateAsc);
+
+  populateSettingsForm();
+  resetWorkoutForm();
+  populateDailyFormForDate(getLocalDateString());
+  renderHistoryTables();
+  renderStorageStatus();
+  refreshCurrentView(getActiveViewName());
 }
 
-function mergeLegacyDailyLogs(importedLogs) {
-  const mergedByDate = Object.fromEntries(
-    getDailyLogs().map((log) => [log.date, clonePlainData(log)])
+async function ensureUserProfile(user) {
+  await setDoc(
+    getUserProfileDoc(user.uid),
+    {
+      uid: user.uid,
+      email: user.email || "",
+      displayName: user.displayName || "",
+      lastSeenAt: new Date().toISOString(),
+    },
+    { merge: true }
   );
+}
 
-  importedLogs.forEach((importedLog) => {
-    const existingLog = mergedByDate[importedLog.date] || createEmptyDailyLog(importedLog.date);
-    mergedByDate[importedLog.date] = mergeDailyLogs(existingLog, importedLog);
+async function saveDailyLog(dailyLog) {
+  const user = requireAuthenticatedUser();
+  const existingLog = getExistingDailyLog(dailyLog.date);
+  const mergedLog = existingLog
+    ? mergeDailyLogs(existingLog, dailyLog)
+    : mergeDailyLogs(createEmptyDailyLog(dailyLog.date), dailyLog);
+  const normalizedLog = normalizeDailyLog(mergedLog);
+
+  await setDoc(getUserDailyLogDoc(user.uid, normalizedLog.date), clonePlainData(normalizedLog), {
+    merge: true,
   });
 
-  const mergedLogs = Object.values(mergedByDate).sort(sortByDateAsc);
-  saveAllDailyLogs(mergedLogs);
-  return mergedLogs.length;
+  upsertDailyLogInState(normalizedLog);
+  return normalizedLog;
 }
 
-function getWorkoutLogs() {
-  return readFromStorage(STORAGE_KEYS.workoutLogs, []).sort(sortByDateAsc);
+async function saveWorkoutLog(workoutLog) {
+  const user = requireAuthenticatedUser();
+  const normalizedLog = normalizeWorkoutLog(workoutLog);
+  const { id, ...payload } = normalizedLog;
+  const docRef = await addDoc(getUserWorkoutLogsCollection(user.uid), clonePlainData(payload));
+  const savedLog = { ...normalizedLog, id: docRef.id };
+  upsertWorkoutLogInState(savedLog);
+  return savedLog;
 }
 
-function saveAllWorkoutLogs(workoutLogs) {
-  writeToStorage(STORAGE_KEYS.workoutLogs, workoutLogs.sort(sortByDateAsc));
+async function saveUserSettings(userSettings) {
+  const user = requireAuthenticatedUser();
+  const normalizedSettings = normalizeUserSettings(userSettings);
+
+  await setDoc(getUserSettingsDoc(user.uid), clonePlainData(normalizedSettings), { merge: true });
+
+  appState.userSettings = normalizedSettings;
+  return normalizedSettings;
 }
 
-function saveWorkoutLog(workoutLog) {
-  const workoutLogs = getWorkoutLogs();
-  workoutLogs.push(workoutLog);
-  saveAllWorkoutLogs(workoutLogs);
+function getUserProfileDoc(uid) {
+  return doc(db, "users", uid);
 }
 
-function getUserSettings() {
-  return readFromStorage(STORAGE_KEYS.userSettings, DEFAULT_SETTINGS);
+function getUserSettingsDoc(uid) {
+  return doc(db, "users", uid, "meta", "settings");
 }
 
-function saveUserSettings(userSettings) {
-  writeToStorage(STORAGE_KEYS.userSettings, userSettings);
+function getUserDailyLogsCollection(uid) {
+  return collection(db, "users", uid, "dailyLogs");
+}
+
+function getUserDailyLogDoc(uid, logId) {
+  return doc(db, "users", uid, "dailyLogs", logId);
+}
+
+function getUserWorkoutLogsCollection(uid) {
+  return collection(db, "users", uid, "workoutLogs");
 }
 
 /*
@@ -249,7 +411,7 @@ function saveUserSettings(userSettings) {
   ---------------------------------------------------------------------------
 */
 
-function refreshCurrentView(viewName) {
+function refreshCurrentView(viewName = "dashboard") {
   dom.navButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === viewName);
   });
@@ -269,8 +431,14 @@ function refreshCurrentView(viewName) {
   }
 }
 
-function handleDailyLogSubmit(event) {
+async function handleDailyLogSubmit(event) {
   event.preventDefault();
+
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before saving a daily log.", true);
+    setAppLocked(true);
+    return;
+  }
 
   const calories = toNumberOrNull(dom.dailyForm.elements.calories.value);
   const protein = toNumberOrNull(dom.dailyForm.elements.protein.value);
@@ -300,15 +468,30 @@ function handleDailyLogSubmit(event) {
     notes: dom.dailyForm.elements.notes.value.trim(),
   };
 
-  saveDailyLog(dailyLog);
-  renderHistoryTables();
-  renderStorageStatus();
-  showStatusMessage(`Saved daily log for ${dailyLog.date}.`);
-  refreshCurrentView(getActiveViewName());
+  setLoadingState(true, `Saving daily log for ${dailyLog.date}...`);
+
+  try {
+    await saveDailyLog(dailyLog);
+    renderHistoryTables();
+    renderStorageStatus();
+    showStatusMessage(`Saved daily log for ${dailyLog.date}.`);
+    refreshCurrentView(getActiveViewName());
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    setLoadingState(false);
+  }
 }
 
-function handleWorkoutLogSubmit(event) {
+async function handleWorkoutLogSubmit(event) {
   event.preventDefault();
+
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before saving a workout.", true);
+    setAppLocked(true);
+    return;
+  }
 
   const exercises = collectExercisesFromForm();
   if (exercises.length === 0) {
@@ -317,23 +500,37 @@ function handleWorkoutLogSubmit(event) {
   }
 
   const workoutLog = {
-    id: generateId(),
     date: dom.workoutForm.elements.date.value,
     session_type: dom.workoutForm.elements.session_type.value.trim(),
     duration: toNumberOrNull(dom.workoutForm.elements.duration.value),
     exercises,
   };
 
-  saveWorkoutLog(workoutLog);
-  renderHistoryTables();
-  renderStorageStatus();
-  showStatusMessage(`Saved workout log for ${workoutLog.date}.`);
-  resetWorkoutForm();
-  refreshCurrentView(getActiveViewName());
+  setLoadingState(true, `Saving workout for ${workoutLog.date}...`);
+
+  try {
+    const savedWorkout = await saveWorkoutLog(workoutLog);
+    renderHistoryTables();
+    renderStorageStatus();
+    showStatusMessage(`Saved workout log for ${savedWorkout.date}.`);
+    resetWorkoutForm();
+    refreshCurrentView(getActiveViewName());
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    setLoadingState(false);
+  }
 }
 
-function handleSettingsSubmit(event) {
+async function handleSettingsSubmit(event) {
   event.preventDefault();
+
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before saving settings.", true);
+    setAppLocked(true);
+    return;
+  }
 
   const calorieTarget = Number(dom.settingsForm.elements.calorieTarget.value);
   const proteinGramTarget = Number(dom.settingsForm.elements.proteinGramTarget.value);
@@ -348,21 +545,30 @@ function handleSettingsSubmit(event) {
     return;
   }
 
-  saveUserSettings({
-    calorieTarget,
-    proteinGramTarget,
-    macroTarget: { protein, carbs, fat },
-    waterTargetGlasses,
-    waterUnitAmountMl,
-  });
+  setLoadingState(true, "Saving your targets...");
 
-  if (!getExistingDailyLog(dom.dailyForm.elements.date.value)) {
-    populateDailyFormForDate(dom.dailyForm.elements.date.value);
+  try {
+    await saveUserSettings({
+      calorieTarget,
+      proteinGramTarget,
+      macroTarget: { protein, carbs, fat },
+      waterTargetGlasses,
+      waterUnitAmountMl,
+    });
+
+    if (!getExistingDailyLog(dom.dailyForm.elements.date.value)) {
+      populateDailyFormForDate(dom.dailyForm.elements.date.value);
+    }
+
+    renderStorageStatus();
+    showStatusMessage("Saved settings and refreshed your weekly targets.");
+    refreshCurrentView(getActiveViewName());
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    setLoadingState(false);
   }
-
-  renderStorageStatus();
-  showStatusMessage("Saved settings and updated the weekly targets.");
-  refreshCurrentView(getActiveViewName());
 }
 
 async function handleCsvImport(event) {
@@ -371,20 +577,28 @@ async function handleCsvImport(event) {
     return;
   }
 
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before importing legacy data.", true);
+    event.target.value = "";
+    setAppLocked(true);
+    return;
+  }
+
   try {
+    setLoadingState(true, `Importing ${file.name}...`);
     const csvText = await file.text();
     const importedLogs = parseLegacyCsv(csvText);
-    mergeLegacyDailyLogs(importedLogs);
+    await Promise.all(importedLogs.map((log) => saveDailyLog(log)));
+
     renderHistoryTables();
     renderStorageStatus();
-    if (getActiveViewName() === "dashboard") {
-      renderDashboard();
-    }
+    refreshCurrentView(getActiveViewName());
     showStatusMessage(`Imported ${importedLogs.length} legacy row(s) from ${file.name}.`);
   } catch (error) {
     console.error(error);
     showStatusMessage(error.message || "Unable to import that CSV file.", true);
   } finally {
+    setLoadingState(false);
     event.target.value = "";
   }
 }
@@ -392,10 +606,17 @@ async function handleCsvImport(event) {
 function handleBackupExport() {
   const payload = {
     exportedAt: new Date().toISOString(),
-    version: 2,
-    userSettings: getUserSettings(),
-    dailyLogs: getDailyLogs(),
-    workoutLogs: getWorkoutLogs(),
+    version: 3,
+    user: appState.currentUser
+      ? {
+          uid: appState.currentUser.uid,
+          email: appState.currentUser.email || "",
+          displayName: appState.currentUser.displayName || "",
+        }
+      : null,
+    userSettings: appState.userSettings,
+    dailyLogs: appState.dailyLogs,
+    workoutLogs: appState.workoutLogs,
   };
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -404,7 +625,7 @@ function handleBackupExport() {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `fitness-ledger-backup-${getLocalDateString()}.json`;
+  anchor.download = `health-ledger-backup-${getLocalDateString()}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 
@@ -412,7 +633,7 @@ function handleBackupExport() {
 }
 
 function populateSettingsForm() {
-  const settings = getUserSettings();
+  const settings = appState.userSettings;
   dom.settingsForm.elements.calorieTarget.value = settings.calorieTarget;
   dom.settingsForm.elements.proteinGramTarget.value = settings.proteinGramTarget;
   dom.settingsForm.elements.proteinTarget.value = settings.macroTarget.protein;
@@ -429,7 +650,7 @@ function seedFormDates() {
 }
 
 function populateDailyFormForDate(date) {
-  const settings = getUserSettings();
+  const settings = appState.userSettings;
   const existingLog = getExistingDailyLog(date);
   const log = existingLog || createEmptyDailyLog(date);
   const derivedPercentages = deriveMacroPercentages(log.calories, log.macros);
@@ -460,7 +681,7 @@ function populateDailyFormForDate(date) {
 }
 
 function getExistingDailyLog(date) {
-  return getDailyLogs().find((log) => log.date === date) || null;
+  return appState.dailyLogs.find((log) => log.date === date) || null;
 }
 
 function setDailyQuote() {
@@ -481,19 +702,30 @@ function showStatusMessage(message, isError = false) {
     : "rgba(104, 228, 255, 0.2)";
 }
 
+function clearStatusMessage() {
+  dom.statusMessage.textContent = "";
+  dom.statusMessage.classList.remove("visible");
+}
+
 function renderStorageStatus() {
-  const dailyLogs = getDailyLogs();
-  const workoutLogs = getWorkoutLogs();
+  if (!appState.currentUser) {
+    dom.storageStatus.textContent =
+      "Sign in to sync your daily logs, workouts, and targets to Firestore. " +
+      "When connected, all records stay scoped under your authenticated user ID.";
+    return;
+  }
+
   const snapshot = JSON.stringify({
-    userSettings: getUserSettings(),
-    dailyLogs,
-    workoutLogs,
+    userSettings: appState.userSettings,
+    dailyLogs: appState.dailyLogs,
+    workoutLogs: appState.workoutLogs,
   });
 
   dom.storageStatus.textContent =
-    `This data currently lives inside this browser on this device. ` +
-    `${dailyLogs.length} daily logs and ${workoutLogs.length} workouts ` +
-    `use about ${formatBytes(new Blob([snapshot]).size)}. Export backups here if you want to archive copies to Google Drive.`;
+    `Cloud sync is active for ${appState.currentUser.email || getFriendlyUserName(appState.currentUser)}. ` +
+    `${appState.dailyLogs.length} daily logs and ${appState.workoutLogs.length} workouts ` +
+    `currently use about ${formatBytes(new Blob([snapshot]).size)} in this export. ` +
+    `Firestore reads and writes stay scoped to users/${appState.currentUser.uid}/...`;
 }
 
 function updateNutritionPreview() {
@@ -505,7 +737,7 @@ function updateNutritionPreview() {
   const payload = buildMacroPayloadFromInputs(calories, protein, carbPercent, fatPercent, true);
 
   if (payload.error) {
-    dom.macroPreview.innerHTML = `<strong>Check:</strong> ${payload.error}`;
+    dom.macroPreview.innerHTML = `<strong>Check:</strong> ${escapeHtml(payload.error)}`;
     return;
   }
 
@@ -527,6 +759,85 @@ function updateNutritionPreview() {
     and protein represents <strong>${proteinShare}</strong> of your calorie intake.<br />
     Assigned intake: <strong>${assignedText}</strong>. Remaining unassigned: <strong>${remainingText}</strong>.
   `;
+}
+
+function setSessionState(user) {
+  if (!user) {
+    dom.sessionLabel.textContent = "Sign in to sync your Health Ledger privately to the cloud.";
+    dom.logoutButton.hidden = true;
+    return;
+  }
+
+  dom.sessionLabel.textContent = `Signed in as ${user.email || getFriendlyUserName(user)}. Cloud sync is live.`;
+  dom.logoutButton.hidden = false;
+}
+
+function setAppLocked(isLocked) {
+  document.body.classList.toggle("auth-locked", isLocked);
+  dom.authOverlay.hidden = !isLocked;
+}
+
+function setLoadingState(isVisible, message = "Working...") {
+  document.body.classList.toggle("app-busy", isVisible);
+  dom.loadingOverlay.hidden = !isVisible;
+  dom.loadingCopy.textContent = message;
+}
+
+function setAuthFeedback(message, tone = "") {
+  dom.authFeedback.textContent = message;
+  dom.authFeedback.className = "auth-feedback";
+
+  if (tone) {
+    dom.authFeedback.classList.add(tone);
+  }
+}
+
+function setAuthPending(isPending) {
+  appState.authPending = isPending;
+
+  [
+    dom.authEmail,
+    dom.authPassword,
+    dom.googleSigninButton,
+    dom.emailSigninButton,
+    dom.emailSignupButton,
+  ].forEach((element) => {
+    element.disabled = isPending;
+  });
+}
+
+function renderSignedOutState() {
+  clearDashboardPanels("Sign in to view your private dashboard and Firestore-backed trends.");
+  renderHistoryTables();
+  renderStorageStatus();
+  populateSettingsForm();
+  seedFormDates();
+  resetWorkoutForm();
+  populateDailyFormForDate(getLocalDateString());
+}
+
+function clearDashboardPanels(message) {
+  destroyAllCharts();
+  dom.dashboardSummary.textContent = message;
+  dom.dashboardToday.textContent = "Secure sync is paused";
+  dom.dashboardWeekTitle.textContent = "Week Overview";
+  dom.dashboardWeekCaption.textContent = "Sign in to load your weekly charts.";
+  dom.dashboardWeekSelect.innerHTML = `<option value="${getCurrentWeekKey()}">Current week</option>`;
+  dom.insightCards.innerHTML = "";
+  dom.alertCards.innerHTML = `
+    <article class="alert-card ok">
+      <span>Account Required</span>
+      <strong>Sign In</strong>
+      <p>Your dashboard and forms unlock after Firebase Authentication confirms your session.</p>
+    </article>
+  `;
+}
+
+function clearUserDataState() {
+  appState.dailyLogs = [];
+  appState.workoutLogs = [];
+  appState.userSettings = cloneDefaultSettings();
+  appState.selectedWeekKey = getCurrentWeekKey();
 }
 
 /*
@@ -643,9 +954,14 @@ function collectExercisesFromForm() {
 */
 
 function renderDashboard() {
-  const dailyLogs = getDailyLogs();
-  const workoutLogs = getWorkoutLogs();
-  const settings = getUserSettings();
+  if (!appState.currentUser) {
+    clearDashboardPanels("Sign in to view your private dashboard and Firestore-backed trends.");
+    return;
+  }
+
+  const dailyLogs = appState.dailyLogs;
+  const workoutLogs = appState.workoutLogs;
+  const settings = appState.userSettings;
   const weekOptions = getAvailableWeekOptions(dailyLogs, workoutLogs);
   const selectedWeek = syncWeekSelector(weekOptions);
   const dailyLogsThisWeek = filterLogsByWindow(dailyLogs, selectedWeek);
@@ -666,7 +982,8 @@ function renderDashboard() {
   const totalWorkouts = workoutsThisWeek.length;
 
   dom.dashboardSummary.textContent =
-    `Today is ${formatLongDate(new Date())}. Reviewing ${selectedWeek.label.toLowerCase()} with ${dailyLogsThisWeek.length} daily logs and ${workoutsThisWeek.length} workouts.`;
+    `Today is ${formatLongDate(new Date())}. Reviewing ${selectedWeek.label.toLowerCase()} with ` +
+    `${dailyLogsThisWeek.length} daily logs and ${workoutsThisWeek.length} workouts.`;
 
   renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts);
   renderAlertCards(dailyLogs, selectedWeek, settings);
@@ -680,12 +997,15 @@ function renderDashboard() {
 }
 
 function syncWeekSelector(weekOptions) {
-  const selected = weekOptions.find((option) => option.key === appState.selectedWeekKey) || weekOptions[0];
+  const selected =
+    weekOptions.find((option) => option.key === appState.selectedWeekKey) || weekOptions[0];
+
   appState.selectedWeekKey = selected.key;
 
   dom.dashboardWeekSelect.innerHTML = weekOptions
     .map(
-      (option) => `<option value="${option.key}" ${option.key === selected.key ? "selected" : ""}>${option.label}</option>`
+      (option) =>
+        `<option value="${option.key}" ${option.key === selected.key ? "selected" : ""}>${escapeHtml(option.label)}</option>`
     )
     .join("");
 
@@ -729,9 +1049,9 @@ function renderInsightCards(averageWeight, averageCalories, averageProtein, aver
     .map(
       (card) => `
         <article class="stat-card">
-          <span>${card.label}</span>
-          <strong>${card.value}</strong>
-          <p>${card.detail}</p>
+          <span>${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(card.value)}</strong>
+          <p>${escapeHtml(card.detail)}</p>
         </article>
       `
     )
@@ -811,10 +1131,10 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
   dom.alertCards.innerHTML = alerts
     .map(
       (alert) => `
-        <article class="alert-card ${alert.tone}">
-          <span>${alert.title}</span>
-          <strong>${alert.value}</strong>
-          <p>${alert.detail}</p>
+        <article class="alert-card ${escapeHtml(alert.tone)}">
+          <span>${escapeHtml(alert.title)}</span>
+          <strong>${escapeHtml(alert.value)}</strong>
+          <p>${escapeHtml(alert.detail)}</p>
         </article>
       `
     )
@@ -822,6 +1142,7 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
 }
 
 function renderWeightChart(allDailyLogs, selectedWeek) {
+  const ChartConstructor = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
   const logMap = buildDailyLogMap(allDailyLogs);
   const weights = weekDates.map((date) => logMap[date]?.weight ?? null);
@@ -838,7 +1159,7 @@ function renderWeightChart(allDailyLogs, selectedWeek) {
     return calculateAverage(weightsInWindow);
   });
 
-  chartInstances.weight = new Chart(dom.weightChart, {
+  chartInstances.weight = new ChartConstructor(dom.weightChart, {
     type: "line",
     data: {
       labels: weekDates.map(formatShortDateLabel),
@@ -869,10 +1190,11 @@ function renderWeightChart(allDailyLogs, selectedWeek) {
 }
 
 function renderCalorieChart(dailyLogsThisWeek, selectedWeek, calorieTarget) {
+  const ChartConstructor = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
   const logMap = buildDailyLogMap(dailyLogsThisWeek);
 
-  chartInstances.calories = new Chart(dom.calorieChart, {
+  chartInstances.calories = new ChartConstructor(dom.calorieChart, {
     type: "bar",
     data: {
       labels: weekDates.map(formatShortDateLabel),
@@ -900,10 +1222,11 @@ function renderCalorieChart(dailyLogsThisWeek, selectedWeek, calorieTarget) {
 }
 
 function renderProteinChart(dailyLogsThisWeek, selectedWeek, proteinTarget) {
+  const ChartConstructor = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
   const logMap = buildDailyLogMap(dailyLogsThisWeek);
 
-  chartInstances.protein = new Chart(dom.proteinChart, {
+  chartInstances.protein = new ChartConstructor(dom.proteinChart, {
     type: "bar",
     data: {
       labels: weekDates.map(formatShortDateLabel),
@@ -931,12 +1254,13 @@ function renderProteinChart(dailyLogsThisWeek, selectedWeek, proteinTarget) {
 }
 
 function renderStepsChart(dailyLogsThisWeek, selectedWeek) {
+  const ChartConstructor = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
   const logMap = buildDailyLogMap(dailyLogsThisWeek);
   const stepValues = weekDates.map((date) => logMap[date]?.steps ?? null);
   const averageSteps = calculateAverage(stepValues.filter(isNumber));
 
-  chartInstances.steps = new Chart(dom.stepsChart, {
+  chartInstances.steps = new ChartConstructor(dom.stepsChart, {
     type: "bar",
     data: {
       labels: weekDates.map(formatShortDateLabel),
@@ -964,10 +1288,11 @@ function renderStepsChart(dailyLogsThisWeek, selectedWeek) {
 }
 
 function renderWaterChart(dailyLogsThisWeek, selectedWeek, settings) {
+  const ChartConstructor = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
   const logMap = buildDailyLogMap(dailyLogsThisWeek);
 
-  chartInstances.water = new Chart(dom.waterChart, {
+  chartInstances.water = new ChartConstructor(dom.waterChart, {
     type: "bar",
     data: {
       labels: weekDates.map(formatShortDateLabel),
@@ -975,14 +1300,18 @@ function renderWaterChart(dailyLogsThisWeek, selectedWeek, settings) {
         {
           type: "bar",
           label: "Water Intake",
-          data: weekDates.map((date) => getWaterLitersFromLog(logMap[date] || createEmptyDailyLog(date), settings)),
+          data: weekDates.map((date) =>
+            getWaterLitersFromLog(logMap[date] || createEmptyDailyLog(date), settings)
+          ),
           backgroundColor: "rgba(104, 228, 255, 0.5)",
           borderRadius: 10,
         },
         {
           type: "line",
           label: "Target",
-          data: weekDates.map((date) => getWaterTargetLiters(logMap[date] || createEmptyDailyLog(date), settings)),
+          data: weekDates.map((date) =>
+            getWaterTargetLiters(logMap[date] || createEmptyDailyLog(date), settings)
+          ),
           borderColor: "#f5fbff",
           borderWidth: 2,
           pointRadius: 0,
@@ -995,6 +1324,7 @@ function renderWaterChart(dailyLogsThisWeek, selectedWeek, settings) {
 }
 
 function renderMacroChart(logsThisWeek, macroTarget) {
+  const ChartConstructor = getChartConstructor();
   const totals = logsThisWeek.reduce(
     (accumulator, log) => {
       const macroCalories = getMacroCaloriesBreakdown(log);
@@ -1016,7 +1346,7 @@ function renderMacroChart(logsThisWeek, macroTarget) {
         ]
       : [0, 0, 0];
 
-  chartInstances.macros = new Chart(dom.macroChart, {
+  chartInstances.macros = new ChartConstructor(dom.macroChart, {
     type: "doughnut",
     data: {
       labels: ["Protein", "Carbs", "Fat"],
@@ -1060,6 +1390,7 @@ function renderMacroChart(logsThisWeek, macroTarget) {
 }
 
 function renderVolumeChart(workoutsThisWeek) {
+  const ChartConstructor = getChartConstructor();
   const volumeByMuscleGroup = {};
 
   workoutsThisWeek.forEach((workout) => {
@@ -1069,14 +1400,17 @@ function renderVolumeChart(workoutsThisWeek) {
     });
   });
 
-  chartInstances.volume = new Chart(dom.volumeChart, {
+  const labels = Object.keys(volumeByMuscleGroup);
+  const values = Object.values(volumeByMuscleGroup);
+
+  chartInstances.volume = new ChartConstructor(dom.volumeChart, {
     type: "bar",
     data: {
-      labels: Object.keys(volumeByMuscleGroup),
+      labels: labels.length ? labels : ["No workouts"],
       datasets: [
         {
           label: "Total Sets",
-          data: Object.values(volumeByMuscleGroup),
+          data: values.length ? values : [0],
           backgroundColor: ["#68e4ff", "#d6f7ff", "#8da0b3", "#9ee9ff", "#c6fbff", "#eafcff"],
           borderRadius: 12,
         },
@@ -1095,6 +1429,47 @@ function destroyAllCharts() {
   });
 }
 
+function buildSharedChartOptions(yAxisLabel) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: "index",
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        labels: {
+          color: "#f5fbff",
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: "#98acbc",
+        },
+        grid: {
+          color: "rgba(255, 255, 255, 0.04)",
+        },
+      },
+      y: {
+        ticks: {
+          color: "#98acbc",
+        },
+        grid: {
+          color: "rgba(255, 255, 255, 0.04)",
+        },
+        title: {
+          display: true,
+          text: yAxisLabel,
+          color: "#98acbc",
+        },
+      },
+    },
+  };
+}
+
 /*
   ---------------------------------------------------------------------------
   History tables
@@ -1102,24 +1477,32 @@ function destroyAllCharts() {
 */
 
 function renderHistoryTables() {
-  const dailyLogs = [...getDailyLogs()].sort(sortByDateDesc);
-  const workoutLogs = [...getWorkoutLogs()].sort(sortByDateDesc);
+  const dailyLogs = [...appState.dailyLogs].sort(sortByDateDesc);
+  const workoutLogs = [...appState.workoutLogs].sort(sortByDateDesc);
+
+  if (!appState.currentUser) {
+    dom.dailyHistoryBody.innerHTML =
+      `<tr><td colspan="10" class="empty-state">Sign in to load daily history.</td></tr>`;
+    dom.workoutHistoryBody.innerHTML =
+      `<tr><td colspan="5" class="empty-state">Sign in to load workout history.</td></tr>`;
+    return;
+  }
 
   dom.dailyHistoryBody.innerHTML = dailyLogs.length
     ? dailyLogs
         .map(
           (log) => `
             <tr>
-              <td>${log.date}</td>
+              <td>${escapeHtml(log.date)}</td>
               <td>${formatMaybeNumber(log.weight)}</td>
               <td>${formatMaybeNumber(log.calories)}</td>
               <td>${formatMaybeNumber(log.macros.protein)}</td>
-              <td>${formatMacroHistory(log)}</td>
+              <td>${escapeHtml(formatMacroHistory(log))}</td>
               <td>${formatMaybeNumber(log.steps)}</td>
-              <td>${formatWaterHistory(log)}</td>
+              <td>${escapeHtml(formatWaterHistory(log))}</td>
               <td>${formatMaybeNumber(log.sleep)}</td>
               <td>${formatMaybeNumber(log.energy)}</td>
-              <td>${log.notes || "-"}</td>
+              <td>${escapeHtml(log.notes || "-")}</td>
             </tr>
           `
         )
@@ -1132,11 +1515,11 @@ function renderHistoryTables() {
           const totalSets = log.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
           return `
             <tr>
-              <td>${log.date}</td>
-              <td>${log.session_type}</td>
+              <td>${escapeHtml(log.date)}</td>
+              <td>${escapeHtml(log.session_type || "-")}</td>
               <td>${formatMaybeNumber(log.duration)} min</td>
-              <td>${log.exercises.length}</td>
-              <td>${totalSets}</td>
+              <td>${escapeHtml(String(log.exercises.length))}</td>
+              <td>${escapeHtml(String(totalSets))}</td>
             </tr>
           `;
         })
@@ -1250,6 +1633,59 @@ function normalizeDailyLog(log) {
   return normalized;
 }
 
+function normalizeWorkoutLog(log) {
+  return {
+    id: log.id || "",
+    date: log.date || getLocalDateString(),
+    session_type: (log.session_type || "").trim(),
+    duration: toNumberOrNull(log.duration),
+    exercises: Array.isArray(log.exercises) ? log.exercises.map(normalizeExercise).filter(Boolean) : [],
+  };
+}
+
+function normalizeExercise(exercise) {
+  if (!exercise) {
+    return null;
+  }
+
+  const sets = Array.isArray(exercise.sets)
+    ? exercise.sets
+        .map((set) => ({
+          reps: toNumberOrNull(set?.reps),
+          weight: toNumberOrNull(set?.weight),
+        }))
+        .filter((set) => set.reps !== null || set.weight !== null)
+    : [];
+
+  return {
+    name: (exercise.name || "").trim(),
+    muscle_group: (exercise.muscle_group || "").trim(),
+    sets,
+  };
+}
+
+function normalizeUserSettings(settings) {
+  return {
+    calorieTarget: toNumberOrNull(settings?.calorieTarget) ?? DEFAULT_SETTINGS.calorieTarget,
+    proteinGramTarget:
+      toNumberOrNull(settings?.proteinGramTarget) ?? DEFAULT_SETTINGS.proteinGramTarget,
+    macroTarget: {
+      protein:
+        toNumberOrNull(settings?.macroTarget?.protein) ?? DEFAULT_SETTINGS.macroTarget.protein,
+      carbs: toNumberOrNull(settings?.macroTarget?.carbs) ?? DEFAULT_SETTINGS.macroTarget.carbs,
+      fat: toNumberOrNull(settings?.macroTarget?.fat) ?? DEFAULT_SETTINGS.macroTarget.fat,
+    },
+    waterTargetGlasses:
+      toNumberOrNull(settings?.waterTargetGlasses) ?? DEFAULT_SETTINGS.waterTargetGlasses,
+    waterUnitAmountMl:
+      toNumberOrNull(settings?.waterUnitAmountMl) ?? DEFAULT_SETTINGS.waterUnitAmountMl,
+  };
+}
+
+function cloneDefaultSettings() {
+  return clonePlainData(DEFAULT_SETTINGS);
+}
+
 function buildMacroPayloadFromInputs(calories, proteinGrams, carbPercent, fatPercent, isPreview = false) {
   const hasCalories = isNumber(calories) && calories > 0;
   const hasCarbPercent = isNumber(carbPercent);
@@ -1276,61 +1712,36 @@ function buildMacroPayloadFromInputs(calories, proteinGrams, carbPercent, fatPer
     fat: hasFatPercent ? fatPercent : null,
   };
 
-  let assignedPercent = null;
-  let remainingPercent = null;
+  if (hasCalories && hasCarbPercent) {
+    macros.carbs = roundToOneDecimal(((calories * carbPercent) / 100) / 4);
+  }
 
-  if (hasCalories) {
-    if (hasProtein) {
-      macroPercentages.protein = roundToOneDecimal(((proteinGrams * 4) / calories) * 100);
-    }
+  if (hasCalories && hasFatPercent) {
+    macros.fat = roundToOneDecimal(((calories * fatPercent) / 100) / 9);
+  }
 
-    if (hasCarbPercent) {
-      macros.carbs = roundToOneDecimal((calories * (carbPercent / 100)) / 4);
-    }
+  if (hasCalories && hasProtein) {
+    macroPercentages.protein = roundToOneDecimal(((proteinGrams * 4) / calories) * 100);
+  }
 
-    if (hasFatPercent) {
-      macros.fat = roundToOneDecimal((calories * (fatPercent / 100)) / 9);
-    }
+  const assignedPercent = [macroPercentages.protein, macroPercentages.carbs, macroPercentages.fat]
+    .filter(isNumber)
+    .reduce((sum, value) => sum + value, 0);
+  const remainingPercent = isNumber(assignedPercent) ? roundToOneDecimal(100 - assignedPercent) : null;
 
-    assignedPercent =
-      (macroPercentages.protein || 0) +
-      (macroPercentages.carbs || 0) +
-      (macroPercentages.fat || 0);
-    remainingPercent = Math.max(0, roundToOneDecimal(100 - assignedPercent));
-
-    if (assignedPercent > 100.5) {
-      return {
-        error: isPreview
-          ? "Protein plus carb and fat percentages add up to more than 100%."
-          : "Protein plus carb and fat percentages currently add up to more than 100% of intake.",
-      };
-    }
+  if (assignedPercent > 100.1) {
+    return {
+      error: isPreview
+        ? "Macro percentages currently add up to more than 100%."
+        : "Those macro values exceed 100% of your calories. Adjust protein, carbs, or fat.",
+    };
   }
 
   return {
     macros,
     macroPercentages,
-    assignedPercent,
+    assignedPercent: roundToOneDecimal(assignedPercent),
     remainingPercent,
-  };
-}
-
-function getMacroCaloriesBreakdown(log) {
-  const calories = log.calories;
-  const proteinCalories = isNumber(log.macros.protein)
-    ? log.macros.protein * 4
-    : percentToCalories(log.macroPercentages.protein, calories);
-  const carbCalories = isNumber(log.macros.carbs)
-    ? log.macros.carbs * 4
-    : percentToCalories(log.macroPercentages.carbs, calories);
-  const fatCalories = isNumber(log.macros.fat)
-    ? log.macros.fat * 9
-    : percentToCalories(log.macroPercentages.fat, calories);
-
-  return {
-    protein: proteinCalories || 0,
-    carbs: carbCalories || 0,
-    fat: fatCalories || 0,
   };
 }
 
@@ -1344,51 +1755,53 @@ function deriveMacroPercentages(calories, macros) {
   }
 
   return {
-    protein: isNumber(macros.protein) ? roundToOneDecimal(((macros.protein * 4) / calories) * 100) : null,
-    carbs: isNumber(macros.carbs) ? roundToOneDecimal(((macros.carbs * 4) / calories) * 100) : null,
-    fat: isNumber(macros.fat) ? roundToOneDecimal(((macros.fat * 9) / calories) * 100) : null,
+    protein: isNumber(macros?.protein) ? roundToOneDecimal(((macros.protein * 4) / calories) * 100) : null,
+    carbs: isNumber(macros?.carbs) ? roundToOneDecimal(((macros.carbs * 4) / calories) * 100) : null,
+    fat: isNumber(macros?.fat) ? roundToOneDecimal(((macros.fat * 9) / calories) * 100) : null,
   };
 }
 
-function getWaterLitersFromLog(log, settings) {
-  const glasses = log.water.glasses;
-  const unitAmountMl = log.water.unitAmountMl ?? settings.waterUnitAmountMl;
-
-  if (!isNumber(glasses) || !isNumber(unitAmountMl)) {
-    return null;
-  }
-
-  return roundToTwoDecimals((glasses * unitAmountMl) / 1000);
-}
-
-function getWaterTargetLiters(log, settings) {
-  const targetGlasses = log.water.targetGlasses ?? settings.waterTargetGlasses;
-  const unitAmountMl = log.water.unitAmountMl ?? settings.waterUnitAmountMl;
-
-  if (!isNumber(targetGlasses) || !isNumber(unitAmountMl)) {
-    return null;
-  }
-
-  return roundToTwoDecimals((targetGlasses * unitAmountMl) / 1000);
-}
-
-function formatMacroHistory(log) {
-  const derivedPercentages = deriveMacroPercentages(log.calories, log.macros);
-  const carbsText = isNumber(log.macroPercentages.carbs ?? derivedPercentages.carbs)
-    ? `${roundToOneDecimal(log.macroPercentages.carbs ?? derivedPercentages.carbs)}%`
-    : "-";
-  const fatText = isNumber(log.macroPercentages.fat ?? derivedPercentages.fat)
-    ? `${roundToOneDecimal(log.macroPercentages.fat ?? derivedPercentages.fat)}%`
-    : "-";
-
-  return `C ${carbsText} / F ${fatText}`;
-}
-
-function formatWaterHistory(log) {
-  const targetText = isNumber(log.water.targetGlasses) ? `${roundToOneDecimal(log.water.targetGlasses)}` : "-";
-  const unitText = isNumber(log.water.unitAmountMl) ? `${Math.round(log.water.unitAmountMl)} ml` : "-";
-
-  return `In ${formatMaybeNumber(log.water.glasses)} / Target ${targetText} @ ${unitText}`;
+function mergeDailyLogs(baseLog, incomingLog) {
+  return {
+    date: incomingLog.date || baseLog.date,
+    weight: toNumberOrNull(incomingLog.weight) ?? baseLog.weight ?? null,
+    calories: toNumberOrNull(incomingLog.calories) ?? baseLog.calories ?? null,
+    macros: {
+      protein: toNumberOrNull(incomingLog.macros?.protein) ?? baseLog.macros.protein ?? null,
+      carbs: toNumberOrNull(incomingLog.macros?.carbs) ?? baseLog.macros.carbs ?? null,
+      fat: toNumberOrNull(incomingLog.macros?.fat) ?? baseLog.macros.fat ?? null,
+    },
+    macroPercentages: {
+      protein:
+        toNumberOrNull(incomingLog.macroPercentages?.protein) ??
+        baseLog.macroPercentages.protein ??
+        null,
+      carbs:
+        toNumberOrNull(incomingLog.macroPercentages?.carbs) ??
+        baseLog.macroPercentages.carbs ??
+        null,
+      fat:
+        toNumberOrNull(incomingLog.macroPercentages?.fat) ??
+        baseLog.macroPercentages.fat ??
+        null,
+    },
+    steps: toNumberOrNull(incomingLog.steps) ?? baseLog.steps ?? null,
+    sleep: toNumberOrNull(incomingLog.sleep) ?? baseLog.sleep ?? null,
+    water: {
+      glasses: toNumberOrNull(incomingLog.water?.glasses) ?? baseLog.water.glasses ?? null,
+      targetGlasses:
+        toNumberOrNull(incomingLog.water?.targetGlasses) ?? baseLog.water.targetGlasses ?? null,
+      unitAmountMl:
+        toNumberOrNull(incomingLog.water?.unitAmountMl) ?? baseLog.water.unitAmountMl ?? null,
+    },
+    energy: toNumberOrNull(incomingLog.energy) ?? baseLog.energy ?? null,
+    notes:
+      typeof incomingLog.notes === "string"
+        ? incomingLog.notes.trim()
+        : typeof baseLog.notes === "string"
+          ? baseLog.notes
+          : "",
+  };
 }
 
 function createEmptyDailyLog(date) {
@@ -1418,57 +1831,21 @@ function createEmptyDailyLog(date) {
   };
 }
 
-function mergeDailyLogs(baseLog, incomingLog) {
-  const templateDate = incomingLog.date || baseLog.date;
+function upsertDailyLogInState(dailyLog) {
+  const nextLogs = [...appState.dailyLogs];
+  const existingIndex = nextLogs.findIndex((log) => log.date === dailyLog.date);
 
-  return {
-    ...createEmptyDailyLog(templateDate),
-    ...baseLog,
-    ...incomingLog,
-    macros: {
-      ...createEmptyDailyLog(templateDate).macros,
-      ...(baseLog.macros || {}),
-      ...(incomingLog.macros || {}),
-    },
-    macroPercentages: {
-      ...createEmptyDailyLog(templateDate).macroPercentages,
-      ...(baseLog.macroPercentages || {}),
-      ...(incomingLog.macroPercentages || {}),
-    },
-    water: {
-      ...createEmptyDailyLog(templateDate).water,
-      ...(baseLog.water || {}),
-      ...(incomingLog.water || {}),
-    },
-  };
-}
-
-function clonePlainData(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function dedupeLogsByDate(logs) {
-  return Object.values(
-    logs.reduce((accumulator, log) => {
-      accumulator[log.date] = mergeDailyLogs(
-        accumulator[log.date] || createEmptyDailyLog(log.date),
-        log
-      );
-      return accumulator;
-    }, {})
-  );
-}
-
-function getActiveViewName() {
-  return document.querySelector(".nav-button.active")?.dataset.view || "dashboard";
-}
-
-function generateId() {
-  if (window.crypto?.randomUUID) {
-    return window.crypto.randomUUID();
+  if (existingIndex >= 0) {
+    nextLogs[existingIndex] = dailyLog;
+  } else {
+    nextLogs.push(dailyLog);
   }
 
-  return `workout-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  appState.dailyLogs = nextLogs.sort(sortByDateAsc);
+}
+
+function upsertWorkoutLogInState(workoutLog) {
+  appState.workoutLogs = [...appState.workoutLogs, workoutLog].sort(sortByDateAsc);
 }
 
 function buildDailyLogMap(logs) {
@@ -1476,89 +1853,77 @@ function buildDailyLogMap(logs) {
 }
 
 function getAvailableWeekOptions(dailyLogs, workoutLogs) {
-  const currentWeek = getISOWeekInfo(new Date());
+  const uniqueWeeks = new Map();
   const allDates = [
     ...dailyLogs.map((log) => log.date),
     ...workoutLogs.map((log) => log.date),
-    currentWeek.start,
-  ].filter(Boolean);
+    getLocalDateString(),
+  ];
 
-  const earliestDate = allDates.sort()[0];
-  const earliestWeek = getISOWeekInfo(parseDateString(earliestDate));
-  const options = [];
-  let cursorDate = parseDateString(currentWeek.start);
+  allDates.forEach((dateString) => {
+    const weekInfo = getWeekInfoForDate(dateString);
+    uniqueWeeks.set(weekInfo.key, weekInfo);
+  });
 
-  while (getLocalDateString(cursorDate) >= earliestWeek.start) {
-    const info = getISOWeekInfo(cursorDate);
-    options.push({
-      ...info,
-      label:
-        info.key === currentWeek.key
-          ? `Current Week - ${info.start} to ${info.end}`
-          : `Week ${info.week}, ${info.year} - ${info.start} to ${info.end}`,
-    });
-    cursorDate.setDate(cursorDate.getDate() - 7);
-  }
-
-  return options;
+  return Array.from(uniqueWeeks.values()).sort((left, right) =>
+    right.start.localeCompare(left.start)
+  );
 }
 
 function getCurrentWeekKey() {
-  return getISOWeekInfo(new Date()).key;
+  return getWeekInfoForDate(getLocalDateString()).key;
 }
 
-function getPreviousWeekInfo(weekInfo) {
-  const previousStartDate = parseDateString(weekInfo.start);
-  previousStartDate.setDate(previousStartDate.getDate() - 7);
-  return getISOWeekInfo(previousStartDate);
-}
+function getWeekInfoForDate(dateInput) {
+  const date = toDateAtNoon(dateInput);
+  const day = date.getDay();
+  const distanceFromMonday = (day + 6) % 7;
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() - distanceFromMonday);
+  weekStart.setHours(0, 0, 0, 0);
 
-function getISOWeekInfo(dateValue) {
-  const date = dateValue instanceof Date ? new Date(dateValue) : parseDateString(dateValue);
-  date.setHours(12, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
 
-  const day = (date.getDay() + 6) % 7;
-  const monday = new Date(date);
-  monday.setDate(date.getDate() - day);
-
-  const thursday = new Date(monday);
-  thursday.setDate(monday.getDate() + 3);
-  const year = thursday.getFullYear();
-
-  const firstThursday = new Date(year, 0, 4);
-  firstThursday.setHours(12, 0, 0, 0);
-  const firstMonday = startOfISOWeek(firstThursday);
-  const week = Math.round((monday - firstMonday) / (7 * 24 * 60 * 60 * 1000)) + 1;
-
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  const isoInfo = getIsoWeekInfo(weekStart);
 
   return {
-    key: `${year}-W${String(week).padStart(2, "0")}`,
-    year,
-    week,
-    start: getLocalDateString(monday),
-    end: getLocalDateString(sunday),
-    label: `Week ${week}, ${year}`,
+    key: `${isoInfo.year}-W${String(isoInfo.week).padStart(2, "0")}`,
+    label: `Week ${isoInfo.week}, ${isoInfo.year}`,
+    start: getLocalDateString(weekStart),
+    end: getLocalDateString(weekEnd),
+    week: isoInfo.week,
+    year: isoInfo.year,
   };
 }
 
-function startOfISOWeek(dateValue) {
-  const date = new Date(dateValue);
-  date.setHours(12, 0, 0, 0);
-  const day = (date.getDay() + 6) % 7;
-  date.setDate(date.getDate() - day);
-  return date;
+function getPreviousWeekInfo(weekInfo) {
+  return getWeekInfoForDate(shiftDateString(weekInfo.start, -7));
 }
 
-function parseDateString(dateString) {
-  return new Date(`${dateString}T12:00:00`);
+function getIsoWeekInfo(dateInput) {
+  const date = toDateAtNoon(dateInput);
+  const thursday = new Date(date);
+  thursday.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+
+  const firstThursday = new Date(thursday.getFullYear(), 0, 4);
+  const diffInDays = Math.round((thursday - firstThursday) / 86400000);
+  const week = 1 + Math.floor((diffInDays + ((firstThursday.getDay() + 6) % 7)) / 7);
+
+  return {
+    year: thursday.getFullYear(),
+    week,
+  };
+}
+
+function filterLogsByWindow(logs, weekInfo) {
+  return logs.filter((log) => log.date >= weekInfo.start && log.date <= weekInfo.end);
 }
 
 function getDateStringsInRange(startDate, endDate) {
   const dates = [];
-  const cursor = parseDateString(startDate);
-  const end = parseDateString(endDate);
+  const cursor = toDateAtNoon(startDate);
+  const end = toDateAtNoon(endDate);
 
   while (cursor <= end) {
     dates.push(getLocalDateString(cursor));
@@ -1568,20 +1933,152 @@ function getDateStringsInRange(startDate, endDate) {
   return dates;
 }
 
-function formatShortDateLabel(dateString) {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    day: "numeric",
-  }).format(parseDateString(dateString));
+function shiftDateString(dateString, offsetDays) {
+  const date = toDateAtNoon(dateString);
+  date.setDate(date.getDate() + offsetDays);
+  return getLocalDateString(date);
 }
 
-function formatLongDate(dateValue) {
-  return new Intl.DateTimeFormat(undefined, {
+function formatLongDate(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : toDateAtNoon(dateInput);
+  return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
+    month: "long",
+    day: "numeric",
     year: "numeric",
+  }).format(date);
+}
+
+function formatShortDateLabel(dateInput) {
+  const date = toDateAtNoon(dateInput);
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-  }).format(dateValue instanceof Date ? dateValue : parseDateString(dateValue));
+  }).format(date);
+}
+
+function getLocalDateString(dateInput = new Date()) {
+  const date = dateInput instanceof Date ? dateInput : toDateAtNoon(dateInput);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeCsvDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return getLocalDateString(parsed);
+}
+
+function getWaterLitersFromLog(log, settings) {
+  const glasses = toNumberOrNull(log?.water?.glasses);
+  const unitAmountMl =
+    toNumberOrNull(log?.water?.unitAmountMl) ?? toNumberOrNull(settings?.waterUnitAmountMl);
+
+  if (!isNumber(glasses) || !isNumber(unitAmountMl)) {
+    return null;
+  }
+
+  return roundToOneDecimal((glasses * unitAmountMl) / 1000);
+}
+
+function getWaterTargetLiters(log, settings) {
+  const targetGlasses =
+    toNumberOrNull(log?.water?.targetGlasses) ?? toNumberOrNull(settings?.waterTargetGlasses);
+  const unitAmountMl =
+    toNumberOrNull(log?.water?.unitAmountMl) ?? toNumberOrNull(settings?.waterUnitAmountMl);
+
+  if (!isNumber(targetGlasses) || !isNumber(unitAmountMl)) {
+    return null;
+  }
+
+  return roundToOneDecimal((targetGlasses * unitAmountMl) / 1000);
+}
+
+function getMacroCaloriesBreakdown(log) {
+  return {
+    protein: isNumber(log.macros.protein) ? log.macros.protein * 4 : 0,
+    carbs: isNumber(log.macros.carbs) ? log.macros.carbs * 4 : 0,
+    fat: isNumber(log.macros.fat) ? log.macros.fat * 9 : 0,
+  };
+}
+
+function getFriendlyUserName(user) {
+  return user.displayName || user.email?.split("@")[0] || "there";
+}
+
+function getChartConstructor() {
+  const ChartConstructor = globalThis.Chart;
+
+  if (!ChartConstructor) {
+    throw new Error("Chart.js failed to load. Check the CDN script in index.html.");
+  }
+
+  return ChartConstructor;
+}
+
+function getActiveViewName() {
+  return document.querySelector(".nav-button.active")?.dataset.view || "dashboard";
+}
+
+function requireAuthenticatedUser() {
+  if (!appState.currentUser) {
+    throw new Error("You must be signed in to save data.");
+  }
+
+  return appState.currentUser;
+}
+
+function toDateAtNoon(dateInput) {
+  if (dateInput instanceof Date) {
+    const clone = new Date(dateInput);
+    clone.setHours(12, 0, 0, 0);
+    return clone;
+  }
+
+  const date = new Date(`${dateInput}T12:00:00`);
+  date.setHours(12, 0, 0, 0);
+  return date;
+}
+
+function clonePlainData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function calculateAverage(values) {
+  if (!values.length) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function roundToOneDecimal(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function sortByDateAsc(left, right) {
+  return left.date.localeCompare(right.date);
+}
+
+function sortByDateDesc(left, right) {
+  return right.date.localeCompare(left.date);
+}
+
+function valueOrEmpty(value) {
+  return value ?? "";
 }
 
 function toNumberOrNull(value) {
@@ -1589,135 +2086,72 @@ function toNumberOrNull(value) {
     return null;
   }
 
-  const parsedValue = Number(value);
-  return Number.isFinite(parsedValue) ? parsedValue : null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 function isNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function calculateAverage(values) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function formatMaybeNumber(value) {
-  return isNumber(value) ? value : "-";
+  return isNumber(value) ? escapeHtml(String(value)) : "-";
 }
 
-function valueOrEmpty(value) {
-  return value ?? "";
+function formatMacroHistory(log) {
+  return [
+    `P ${isNumber(log.macros.protein) ? `${log.macros.protein} g` : "-"}`,
+    `C ${isNumber(log.macros.carbs) ? `${log.macros.carbs} g` : "-"}`,
+    `F ${isNumber(log.macros.fat) ? `${log.macros.fat} g` : "-"}`,
+  ].join(" / ");
 }
 
-function getLocalDateString(date = new Date()) {
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 10);
-}
-
-function shiftDateString(dateString, dayOffset) {
-  const shiftedDate = parseDateString(dateString);
-  shiftedDate.setDate(shiftedDate.getDate() + dayOffset);
-  return getLocalDateString(shiftedDate);
-}
-
-function filterLogsByWindow(logs, window) {
-  return logs.filter((log) => log.date >= window.start && log.date <= window.end);
-}
-
-function sortByDateAsc(first, second) {
-  return first.date.localeCompare(second.date);
-}
-
-function sortByDateDesc(first, second) {
-  return second.date.localeCompare(first.date);
-}
-
-function roundToOneDecimal(value) {
-  return Math.round(value * 10) / 10;
-}
-
-function roundToTwoDecimals(value) {
-  return Math.round(value * 100) / 100;
-}
-
-function percentToCalories(percent, calories) {
-  if (!isNumber(percent) || !isNumber(calories) || calories <= 0) {
-    return null;
-  }
-
-  return (percent / 100) * calories;
-}
-
-function normalizeCsvDate(value) {
-  if (!value) {
-    return "";
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    return value.trim();
-  }
-
-  const parsedDate = new Date(value);
-  return Number.isNaN(parsedDate.getTime()) ? "" : getLocalDateString(parsedDate);
-}
-
-function hashString(value) {
-  return Array.from(value).reduce((hash, character) => hash + character.charCodeAt(0), 0);
+function formatWaterHistory(log) {
+  const intake = getWaterLitersFromLog(log, appState.userSettings);
+  const target = getWaterTargetLiters(log, appState.userSettings);
+  const intakeText = isNumber(intake) ? `${intake.toFixed(1)} L` : "-";
+  const targetText = isNumber(target) ? `${target.toFixed(1)} L` : "-";
+  return `${intakeText} / ${targetText}`;
 }
 
 function formatBytes(bytes) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
+  if (!isNumber(bytes) || bytes <= 0) {
+    return "0 B";
   }
 
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** exponent;
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
-function buildSharedChartOptions(yAxisLabel) {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: "index",
-      intersect: false,
-    },
-    scales: {
-      x: {
-        ticks: {
-          color: "#98acbc",
-        },
-        grid: {
-          color: "rgba(152, 172, 188, 0.08)",
-        },
-      },
-      y: {
-        ticks: {
-          color: "#98acbc",
-        },
-        title: {
-          display: true,
-          text: yAxisLabel,
-          color: "#f5fbff",
-        },
-        grid: {
-          color: "rgba(152, 172, 188, 0.08)",
-        },
-      },
-    },
-    plugins: {
-      legend: {
-        labels: {
-          color: "#f5fbff",
-        },
-      },
-    },
-  };
+function hashString(value) {
+  return Array.from(value).reduce((hash, character) => {
+    return (hash << 5) - hash + character.charCodeAt(0);
+  }, 0) >>> 0;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatFirebaseError(error) {
+  if (!error) {
+    return "Something went wrong.";
+  }
+
+  const code = typeof error.code === "string" ? error.code.replace("auth/", "").replace("firestore/", "") : "";
+  if (!code) {
+    return error.message || "Something went wrong.";
+  }
+
+  return code
+    .split(/[-_/]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }

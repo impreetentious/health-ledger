@@ -1,6 +1,6 @@
-# Fitness Ledger
+# Health Ledger
 
-A local-first, vanilla JavaScript single-page application for tracking daily health metrics and workouts.
+A Firebase-backed, vanilla JavaScript single-page application for tracking daily health metrics and workouts.
 
 ## Tech Stack
 
@@ -8,17 +8,19 @@ A local-first, vanilla JavaScript single-page application for tracking daily hea
 - CSS
 - Vanilla JavaScript
 - Chart.js
+- Firebase Authentication
+- Cloud Firestore
 
 ## Run Locally
 
 1. Clone or download the repository.
-2. Open `index.html` in the project root directly in a browser.
-3. Optional: serve the folder with any static server if you prefer a local URL during development.
+2. Serve the project folder with any simple static server so browser module imports and Firebase Auth can load correctly.
+3. Open the served local URL in your browser.
 
 ## Project Structure
 
 ```text
-fitness-ledger/
+health-ledger/
 ├── assets/
 ├── css/
 │   └── style.css
@@ -30,10 +32,10 @@ fitness-ledger/
 
 ## Notes
 
-- The app stores user data locally in the browser with `localStorage`.
+- The app stores user data in Firebase Auth + Cloud Firestore, scoped to the authenticated user.
 - `index.html` remains in the project root to stay compatible with simple static hosting setups such as Vercel.
-- The current structure leaves room for future modules such as Firebase integrations, reusable UI scripts, and design assets.
+- The current structure leaves room for future modules such as reusable UI scripts, richer analytics, and design assets.
 
 ---
 
-**Version:** v0.1.0
+**Version:** v0.2.0
