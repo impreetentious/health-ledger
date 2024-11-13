@@ -4,11 +4,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebas
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
   getAuth,
+  linkWithCredential,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  updateProfile,
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 import {
   addDoc,
@@ -85,6 +88,8 @@ const appState = {
   workoutLogs: [],
   userSettings: cloneDefaultSettings(),
   authPending: false,
+  pendingGoogleCredential: null,
+  pendingLinkEmail: "",
 };
 
 const dom = {};
@@ -110,8 +115,18 @@ function cacheDomReferences() {
   dom.navButtons = document.querySelectorAll(".nav-button");
   dom.views = document.querySelectorAll(".view");
   dom.statusMessage = document.getElementById("status-message");
+  dom.dashboardHeading = document.getElementById("dashboard-heading");
   dom.sessionLabel = document.getElementById("session-label");
-  dom.logoutButton = document.getElementById("logout-button");
+  dom.profileShell = document.getElementById("profile-shell");
+  dom.profileTrigger = document.getElementById("profile-trigger");
+  dom.profileMenu = document.getElementById("profile-menu");
+  dom.profileName = document.getElementById("profile-name");
+  dom.profileSubtitle = document.getElementById("profile-subtitle");
+  dom.profileAvatarImage = document.getElementById("profile-avatar-image");
+  dom.profileAvatarFallback = document.getElementById("profile-avatar-fallback");
+  dom.accountMenuButton = document.getElementById("account-menu-button");
+  dom.preferencesMenuButton = document.getElementById("preferences-menu-button");
+  dom.logoutMenuButton = document.getElementById("logout-menu-button");
 
   dom.dailyQuoteText = document.getElementById("daily-quote-text");
   dom.dailyQuoteSource = document.getElementById("daily-quote-source");
@@ -155,7 +170,24 @@ function cacheDomReferences() {
   dom.emailSignupButton = document.getElementById("email-signup-button");
   dom.authFeedback = document.getElementById("auth-feedback");
 
+  dom.accountModal = document.getElementById("account-modal");
+  dom.accountForm = document.getElementById("account-form");
+  dom.accountDisplayName = document.getElementById("account-display-name");
+  dom.accountPhotoUrl = document.getElementById("account-photo-url");
+  dom.accountModalClose = document.getElementById("account-modal-close");
+  dom.accountModalCancel = document.getElementById("account-modal-cancel");
+
+  dom.preferencesModal = document.getElementById("preferences-modal");
+  dom.preferencesModalClose = document.getElementById("preferences-modal-close");
+  dom.preferencesModalCancel = document.getElementById("preferences-modal-cancel");
+
+  dom.logoutModal = document.getElementById("logout-modal");
+  dom.logoutModalClose = document.getElementById("logout-modal-close");
+  dom.logoutCancelButton = document.getElementById("logout-cancel-button");
+  dom.logoutConfirmButton = document.getElementById("logout-confirm-button");
+
   dom.loadingOverlay = document.getElementById("app-loading");
+  dom.loadingLabel = document.getElementById("loading-label");
   dom.loadingCopy = document.getElementById("loading-copy");
 }
 
@@ -186,7 +218,30 @@ function bindEvents() {
   dom.googleSigninButton.addEventListener("click", handleGoogleSignIn);
   dom.authForm.addEventListener("submit", handleEmailSignIn);
   dom.emailSignupButton.addEventListener("click", handleEmailSignUp);
-  dom.logoutButton.addEventListener("click", handleLogout);
+  dom.profileAvatarImage.addEventListener("error", () => {
+    dom.profileAvatarImage.hidden = true;
+    dom.profileAvatarImage.removeAttribute("src");
+    dom.profileAvatarFallback.hidden = false;
+  });
+
+  dom.profileTrigger.addEventListener("click", handleProfileTriggerClick);
+  dom.accountMenuButton.addEventListener("click", openAccountModal);
+  dom.preferencesMenuButton.addEventListener("click", openPreferencesModal);
+  dom.logoutMenuButton.addEventListener("click", openLogoutModal);
+
+  dom.accountForm.addEventListener("submit", handleAccountSubmit);
+  dom.accountModalClose.addEventListener("click", () => closeUtilityModal(dom.accountModal));
+  dom.accountModalCancel.addEventListener("click", () => closeUtilityModal(dom.accountModal));
+
+  dom.preferencesModalClose.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
+  dom.preferencesModalCancel.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
+
+  dom.logoutModalClose.addEventListener("click", () => closeUtilityModal(dom.logoutModal));
+  dom.logoutCancelButton.addEventListener("click", () => closeUtilityModal(dom.logoutModal));
+  dom.logoutConfirmButton.addEventListener("click", handleLogoutConfirm);
+
+  document.addEventListener("click", handleDocumentClick);
+  document.addEventListener("keydown", handleGlobalKeydown);
 }
 
 /*
@@ -202,6 +257,7 @@ async function handleAuthStateChange(user) {
 
   if (!user) {
     appState.currentUser = null;
+    clearPendingGoogleLink();
     clearUserDataState();
     renderSignedOutState();
     setSessionState(null);
@@ -216,10 +272,11 @@ async function handleAuthStateChange(user) {
   }
 
   appState.currentUser = user;
+  clearPendingGoogleLink();
   setSessionState(user);
   setAppLocked(false);
   setAuthFeedback("");
-  setLoadingState(true, "Loading your private ledger...");
+  setLoadingState(true, `Loading ${getFriendlyUserName(user)}'s dashboard...`, `Welcome, ${getFriendlyUserName(user)}`);
 
   try {
     await ensureUserProfile(user);
@@ -250,6 +307,39 @@ async function handleGoogleSignIn() {
     setAuthFeedback("Google sign-in worked. Pulling your data now...", "success");
   } catch (error) {
     console.error(error);
+    if (error.code === "auth/account-exists-with-different-credential") {
+      const pendingCredential = GoogleAuthProvider.credentialFromError(error);
+      const email = error.customData?.email || "";
+
+      if (pendingCredential && email) {
+        let methods = [];
+
+        try {
+          methods = await fetchSignInMethodsForEmail(auth, email);
+        } catch (linkingLookupError) {
+          console.error(linkingLookupError);
+        }
+
+        appState.pendingGoogleCredential = pendingCredential;
+        appState.pendingLinkEmail = email;
+        dom.authEmail.value = email;
+
+        if (methods.includes("password")) {
+          setAuthFeedback(
+            "This email already uses a password login. Sign in below once to link Google to the same Health Ledger account.",
+            "error"
+          );
+          return;
+        }
+
+        setAuthFeedback(
+          "This email already exists with another sign-in method. Use that method first, then Google can be linked to the same profile.",
+          "error"
+        );
+        return;
+      }
+    }
+
     setAuthFeedback(formatFirebaseError(error), "error");
   } finally {
     setAuthPending(false);
@@ -278,11 +368,14 @@ async function submitEmailAuth(mode) {
   setAuthPending(true);
 
   try {
+    let userCredential;
+
     if (mode === "signup") {
-      await createUserWithEmailAndPassword(auth, email, password);
+      userCredential = await createUserWithEmailAndPassword(auth, email, password);
       setAuthFeedback("Account created. Loading your new workspace...", "success");
     } else {
-      await signInWithEmailAndPassword(auth, email, password);
+      userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await linkPendingGoogleCredential(userCredential.user);
       setAuthFeedback("Signed in. Loading your workspace...", "success");
     }
   } catch (error) {
@@ -293,7 +386,8 @@ async function submitEmailAuth(mode) {
   }
 }
 
-async function handleLogout() {
+async function handleLogoutConfirm() {
+  closeUtilityModal(dom.logoutModal);
   setLoadingState(true, "Signing you out...");
 
   try {
@@ -343,6 +437,7 @@ async function ensureUserProfile(user) {
       uid: user.uid,
       email: user.email || "",
       displayName: user.displayName || "",
+      photoURL: user.photoURL || "",
       lastSeenAt: new Date().toISOString(),
     },
     { merge: true }
@@ -562,7 +657,42 @@ async function handleSettingsSubmit(event) {
 
     renderStorageStatus();
     showStatusMessage("Saved settings and refreshed your weekly targets.");
+    closeUtilityModal(dom.preferencesModal);
     refreshCurrentView(getActiveViewName());
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+async function handleAccountSubmit(event) {
+  event.preventDefault();
+
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before editing your account.", true);
+    setAppLocked(true);
+    return;
+  }
+
+  const displayName = dom.accountForm.elements.displayName.value.trim();
+  const photoURL = dom.accountForm.elements.photoURL.value.trim();
+
+  setLoadingState(true, "Saving account details...", "Updating your profile");
+
+  try {
+    await updateProfile(auth.currentUser, {
+      displayName: displayName || null,
+      photoURL: photoURL || null,
+    });
+
+    appState.currentUser = auth.currentUser;
+    await ensureUserProfile(auth.currentUser);
+    setSessionState(auth.currentUser);
+    refreshCurrentView(getActiveViewName());
+    closeUtilityModal(dom.accountModal);
+    showStatusMessage("Your account profile has been updated.");
   } catch (error) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
@@ -764,22 +894,47 @@ function updateNutritionPreview() {
 function setSessionState(user) {
   if (!user) {
     dom.sessionLabel.textContent = "Sign in to sync your Health Ledger privately to the cloud.";
-    dom.logoutButton.hidden = true;
+    dom.profileShell.hidden = true;
+    dom.profileTrigger.setAttribute("aria-expanded", "false");
+    dom.profileMenu.hidden = true;
+    dom.profileName.textContent = "Health Ledger User";
+    dom.profileSubtitle.textContent = "My Profile";
+    dom.profileAvatarImage.hidden = true;
+    dom.profileAvatarImage.removeAttribute("src");
+    dom.profileAvatarFallback.hidden = false;
     return;
   }
 
-  dom.sessionLabel.textContent = `Signed in as ${user.email || getFriendlyUserName(user)}. Cloud sync is live.`;
-  dom.logoutButton.hidden = false;
+  dom.sessionLabel.textContent = `Signed in as ${getFriendlyUserName(user)}. Cloud sync is live.`;
+  dom.profileShell.hidden = false;
+  dom.profileTrigger.setAttribute("aria-expanded", "false");
+  dom.profileMenu.hidden = true;
+  dom.profileName.textContent = getFriendlyUserName(user);
+  dom.profileSubtitle.textContent = user.email || "My Profile";
+
+  if (user.photoURL) {
+    dom.profileAvatarImage.src = user.photoURL;
+    dom.profileAvatarImage.hidden = false;
+    dom.profileAvatarFallback.hidden = true;
+  } else {
+    dom.profileAvatarImage.hidden = true;
+    dom.profileAvatarImage.removeAttribute("src");
+    dom.profileAvatarFallback.hidden = false;
+  }
 }
 
 function setAppLocked(isLocked) {
   document.body.classList.toggle("auth-locked", isLocked);
   dom.authOverlay.hidden = !isLocked;
+  if (isLocked) {
+    closeTransientUi();
+  }
 }
 
-function setLoadingState(isVisible, message = "Working...") {
+function setLoadingState(isVisible, message = "Working...", title = "Syncing Health Ledger") {
   document.body.classList.toggle("app-busy", isVisible);
   dom.loadingOverlay.hidden = !isVisible;
+  dom.loadingLabel.textContent = title;
   dom.loadingCopy.textContent = message;
 }
 
@@ -806,7 +961,129 @@ function setAuthPending(isPending) {
   });
 }
 
+function handleProfileTriggerClick(event) {
+  event.stopPropagation();
+  const isOpen = dom.profileTrigger.getAttribute("aria-expanded") === "true";
+  setProfileMenuOpen(!isOpen);
+}
+
+function handleDocumentClick(event) {
+  if (
+    !dom.profileShell.hidden &&
+    !dom.profileShell.contains(event.target) &&
+    dom.profileTrigger.getAttribute("aria-expanded") === "true"
+  ) {
+    setProfileMenuOpen(false);
+  }
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  if (!dom.logoutModal.hidden) {
+    closeUtilityModal(dom.logoutModal);
+    return;
+  }
+
+  if (!dom.preferencesModal.hidden) {
+    closeUtilityModal(dom.preferencesModal);
+    return;
+  }
+
+  if (!dom.accountModal.hidden) {
+    closeUtilityModal(dom.accountModal);
+    return;
+  }
+
+  if (dom.profileTrigger.getAttribute("aria-expanded") === "true") {
+    setProfileMenuOpen(false);
+  }
+}
+
+function setProfileMenuOpen(isOpen) {
+  dom.profileTrigger.setAttribute("aria-expanded", String(isOpen));
+  dom.profileMenu.hidden = !isOpen;
+}
+
+function openAccountModal() {
+  populateAccountForm();
+  openUtilityModal(dom.accountModal);
+}
+
+function openPreferencesModal() {
+  populateSettingsForm();
+  openUtilityModal(dom.preferencesModal);
+}
+
+function openLogoutModal() {
+  openUtilityModal(dom.logoutModal);
+}
+
+function openUtilityModal(modal) {
+  closeTransientUi();
+  modal.hidden = false;
+}
+
+function closeUtilityModal(modal) {
+  modal.hidden = true;
+}
+
+function closeTransientUi() {
+  setProfileMenuOpen(false);
+  closeUtilityModal(dom.accountModal);
+  closeUtilityModal(dom.preferencesModal);
+  closeUtilityModal(dom.logoutModal);
+}
+
+function populateAccountForm() {
+  const user = appState.currentUser;
+  dom.accountDisplayName.value = user?.displayName || "";
+  dom.accountPhotoUrl.value = user?.photoURL || "";
+}
+
+async function linkPendingGoogleCredential(user) {
+  if (!appState.pendingGoogleCredential) {
+    return;
+  }
+
+  const normalizedPendingEmail = normalizeEmail(appState.pendingLinkEmail);
+  if (normalizedPendingEmail && normalizeEmail(user.email) !== normalizedPendingEmail) {
+    return;
+  }
+
+  try {
+    await linkWithCredential(user, appState.pendingGoogleCredential);
+    clearPendingGoogleLink();
+    setAuthFeedback(
+      "Google has been linked to this account. You can now use either sign-in method.",
+      "success"
+    );
+  } catch (error) {
+    if (
+      error.code === "auth/provider-already-linked" ||
+      error.code === "auth/credential-already-in-use"
+    ) {
+      clearPendingGoogleLink();
+      setAuthFeedback(
+        "Google is already linked to this account. You can use either sign-in method.",
+        "success"
+      );
+      return;
+    }
+
+    throw error;
+  }
+}
+
+function clearPendingGoogleLink() {
+  appState.pendingGoogleCredential = null;
+  appState.pendingLinkEmail = "";
+}
+
 function renderSignedOutState() {
+  closeTransientUi();
   clearDashboardPanels("Sign in to view your private dashboard and Firestore-backed trends.");
   renderHistoryTables();
   renderStorageStatus();
@@ -818,6 +1095,7 @@ function renderSignedOutState() {
 
 function clearDashboardPanels(message) {
   destroyAllCharts();
+  dom.dashboardHeading.textContent = "Welcome to Health Ledger";
   dom.dashboardSummary.textContent = message;
   dom.dashboardToday.textContent = "Secure sync is paused";
   dom.dashboardWeekTitle.textContent = "Week Overview";
@@ -958,6 +1236,8 @@ function renderDashboard() {
     clearDashboardPanels("Sign in to view your private dashboard and Firestore-backed trends.");
     return;
   }
+
+  dom.dashboardHeading.textContent = `Welcome back, ${getFriendlyUserName(appState.currentUser)}`;
 
   const dailyLogs = appState.dailyLogs;
   const workoutLogs = appState.workoutLogs;
@@ -2016,7 +2296,11 @@ function getMacroCaloriesBreakdown(log) {
 }
 
 function getFriendlyUserName(user) {
-  return user.displayName || user.email?.split("@")[0] || "there";
+  return user.displayName?.trim() || user.email?.split("@")[0] || "there";
+}
+
+function normalizeEmail(value) {
+  return (value || "").trim().toLowerCase();
 }
 
 function getChartConstructor() {

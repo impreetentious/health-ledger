@@ -20,21 +20,82 @@
         </div>
 
         <div class="topbar-aside">
+          <div class="profile-row">
+            <p id="session-label" class="session-label">
+              Sign in to sync your Health Ledger privately to the cloud.
+            </p>
+
+            <div id="profile-shell" class="profile-shell" hidden>
+              <button
+                type="button"
+                id="profile-trigger"
+                class="profile-trigger"
+                aria-haspopup="menu"
+                aria-expanded="false"
+              >
+                <span class="profile-avatar">
+                  <img
+                    id="profile-avatar-image"
+                    class="profile-avatar-image"
+                    alt="Profile avatar"
+                    hidden
+                  />
+                  <span id="profile-avatar-fallback" class="profile-avatar-fallback" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" class="avatar-glyph" focusable="false" aria-hidden="true">
+                      <path
+                        d="M12 12.25a4.25 4.25 0 1 0 0-8.5 4.25 4.25 0 0 0 0 8.5Zm0 2.5c-4.35 0-7.75 2.3-7.75 5.25 0 .41.34.75.75.75h14c.41 0 .75-.34.75-.75 0-2.95-3.4-5.25-7.75-5.25Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </span>
+                </span>
+
+                <span class="profile-meta">
+                  <strong id="profile-name">Health Ledger User</strong>
+                  <span id="profile-subtitle">My Profile</span>
+                </span>
+              </button>
+
+              <div id="profile-menu" class="profile-menu" role="menu" hidden>
+                <button type="button" id="account-menu-button" class="profile-menu-item" role="menuitem">
+                  <span>My Account</span>
+                  <small>Edit name and profile image</small>
+                </button>
+                <button
+                  type="button"
+                  id="preferences-menu-button"
+                  class="profile-menu-item"
+                  role="menuitem"
+                >
+                  <span>Preferences</span>
+                  <small>Targets, macros, and water defaults</small>
+                </button>
+                <button type="button" id="logout-menu-button" class="profile-menu-item logout-item" role="menuitem">
+                  <span class="logout-item-label">
+                    <svg viewBox="0 0 24 24" class="menu-icon" focusable="false" aria-hidden="true">
+                      <path
+                        d="M10 4.75A.75.75 0 0 1 10.75 4h5.5A2.75 2.75 0 0 1 19 6.75v10.5A2.75 2.75 0 0 1 16.25 20h-5.5a.75.75 0 0 1 0-1.5h5.5c.69 0 1.25-.56 1.25-1.25V6.75c0-.69-.56-1.25-1.25-1.25h-5.5A.75.75 0 0 1 10 4.75Zm2.78 7.25-2.22-2.22a.75.75 0 1 0-1.06 1.06l.94.91H5.75a.75.75 0 0 0 0 1.5h4.69l-.94.91a.75.75 0 0 0 1.06 1.06L12.78 13a.75.75 0 0 0 0-1Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    <span>Log Out</span>
+                  </span>
+                  <small>Sign out safely from this device</small>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <article class="quote-card" aria-live="polite">
             <span class="quote-label">Today&apos;s line</span>
             <p id="daily-quote-text" class="quote-text"></p>
             <p id="daily-quote-source" class="quote-source"></p>
           </article>
 
-          <p id="session-label" class="session-label">
-            Sign in to sync your Health Ledger privately to the cloud.
-          </p>
-
           <nav class="main-nav" aria-label="Primary">
             <button class="nav-button active" data-view="dashboard">Dashboard</button>
             <button class="nav-button" data-view="entry">Data Entry</button>
-            <button class="nav-button" data-view="history">History &amp; Settings</button>
-            <button type="button" id="logout-button" class="secondary-button" hidden>Log Out</button>
+            <button class="nav-button" data-view="history">History</button>
           </nav>
         </div>
       </header>
@@ -45,7 +106,7 @@
         <section id="dashboard-view" class="view active" aria-labelledby="dashboard-heading">
           <div class="section-heading">
             <div>
-              <h2 id="dashboard-heading">Progress Dashboard</h2>
+              <h2 id="dashboard-heading">Welcome to Health Ledger</h2>
             </div>
             <p id="dashboard-summary" class="section-copy"></p>
           </div>
@@ -251,54 +312,14 @@
         <section id="history-view" class="view" aria-labelledby="history-heading">
           <div class="section-heading">
             <div>
-              <h2 id="history-heading">History &amp; Settings</h2>
+              <h2 id="history-heading">History &amp; Tools</h2>
             </div>
             <p class="section-copy">
-              Review past entries, adjust targets, and keep your ledger backed up.
+              Review past entries, import older data, and keep your ledger backed up.
             </p>
           </div>
 
           <div class="history-grid">
-            <article class="panel">
-              <div class="panel-header">
-                <h3>Targets</h3>
-                <p>These settings drive the weekly charts.</p>
-              </div>
-
-              <form id="settings-form" class="form-grid">
-                <label>
-                  <span>Daily Calorie Target</span>
-                  <input type="number" id="settings-calories" name="calorieTarget" min="0" required />
-                </label>
-                <label>
-                  <span>Daily Protein Target (g)</span>
-                  <input type="number" id="settings-protein-grams" name="proteinGramTarget" min="0" required />
-                </label>
-                <label>
-                  <span>Protein % Target</span>
-                  <input type="number" id="settings-macro-protein" name="proteinTarget" min="0" max="100" required />
-                </label>
-                <label>
-                  <span>Carbs % Target</span>
-                  <input type="number" id="settings-macro-carbs" name="carbsTarget" min="0" max="100" required />
-                </label>
-                <label>
-                  <span>Fat % Target</span>
-                  <input type="number" id="settings-macro-fat" name="fatTarget" min="0" max="100" required />
-                </label>
-                <label>
-                  <span>Default Water Target (glasses)</span>
-                  <input type="number" id="settings-water-target" name="waterTargetGlasses" min="0" step="0.1" required />
-                </label>
-                <label>
-                  <span>Default Glass Size (ml)</span>
-                  <input type="number" id="settings-water-unit" name="waterUnitAmountMl" min="0" step="1" required />
-                </label>
-
-                <button type="submit" class="primary-button full-width">Save Settings</button>
-              </form>
-            </article>
-
             <article class="panel">
               <div class="panel-header">
                 <h3>Legacy Data Importer</h3>
@@ -387,7 +408,7 @@
     <div id="app-loading" class="app-loading" role="status" aria-live="polite">
       <div class="loading-card">
         <div class="loading-orb" aria-hidden="true"></div>
-        <p class="loading-label">Syncing Health Ledger</p>
+        <p id="loading-label" class="loading-label">Syncing Health Ledger</p>
         <p id="loading-copy" class="loading-copy">Preparing your secure workspace...</p>
       </div>
     </div>
@@ -454,6 +475,160 @@
           </form>
 
           <p id="auth-feedback" class="auth-feedback" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="account-modal"
+      class="utility-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="account-modal-title"
+      hidden
+    >
+      <div class="utility-modal-card">
+        <div class="utility-modal-header">
+          <div>
+            <span class="quote-label">My Account</span>
+            <h3 id="account-modal-title">Manage your profile</h3>
+          </div>
+          <button type="button" id="account-modal-close" class="utility-close" aria-label="Close account panel">
+            Close
+          </button>
+        </div>
+
+        <p class="section-copy modal-copy">
+          Update the name and profile image shown across your Health Ledger workspace.
+        </p>
+
+        <form id="account-form" class="form-grid utility-form">
+          <label>
+            <span>Display Name</span>
+            <input
+              type="text"
+              id="account-display-name"
+              name="displayName"
+              placeholder="How should we greet you?"
+            />
+          </label>
+          <label>
+            <span>Profile Picture URL</span>
+            <input
+              type="url"
+              id="account-photo-url"
+              name="photoURL"
+              placeholder="https://example.com/avatar.png"
+            />
+          </label>
+
+          <div class="utility-actions full-width">
+            <button type="button" id="account-modal-cancel" class="secondary-button">Cancel</button>
+            <button type="submit" class="primary-button">Save Account</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div
+      id="preferences-modal"
+      class="utility-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="preferences-modal-title"
+      hidden
+    >
+      <div class="utility-modal-card wide-modal-card">
+        <div class="utility-modal-header">
+          <div>
+            <span class="quote-label">Preferences</span>
+            <h3 id="preferences-modal-title">Targets and defaults</h3>
+          </div>
+          <button
+            type="button"
+            id="preferences-modal-close"
+            class="utility-close"
+            aria-label="Close preferences panel"
+          >
+            Close
+          </button>
+        </div>
+
+        <p class="section-copy modal-copy">
+          These targets shape your charts, alerts, and daily defaults.
+        </p>
+
+        <form id="settings-form" class="form-grid utility-form">
+          <label>
+            <span>Daily Calorie Target</span>
+            <input type="number" id="settings-calories" name="calorieTarget" min="0" required />
+          </label>
+          <label>
+            <span>Daily Protein Target (g)</span>
+            <input type="number" id="settings-protein-grams" name="proteinGramTarget" min="0" required />
+          </label>
+          <label>
+            <span>Protein % Target</span>
+            <input type="number" id="settings-macro-protein" name="proteinTarget" min="0" max="100" required />
+          </label>
+          <label>
+            <span>Carbs % Target</span>
+            <input type="number" id="settings-macro-carbs" name="carbsTarget" min="0" max="100" required />
+          </label>
+          <label>
+            <span>Fat % Target</span>
+            <input type="number" id="settings-macro-fat" name="fatTarget" min="0" max="100" required />
+          </label>
+          <label>
+            <span>Default Water Target (glasses)</span>
+            <input type="number" id="settings-water-target" name="waterTargetGlasses" min="0" step="0.1" required />
+          </label>
+          <label>
+            <span>Default Glass Size (ml)</span>
+            <input type="number" id="settings-water-unit" name="waterUnitAmountMl" min="0" step="1" required />
+          </label>
+
+          <div class="utility-actions full-width">
+            <button type="button" id="preferences-modal-cancel" class="secondary-button">Cancel</button>
+            <button type="submit" class="primary-button">Save Preferences</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div
+      id="logout-modal"
+      class="utility-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="logout-modal-title"
+      hidden
+    >
+      <div class="utility-modal-card compact-modal-card">
+        <div class="utility-modal-header">
+          <div>
+            <span class="quote-label">Confirm Logout</span>
+            <h3 id="logout-modal-title">Are you sure you want to log out from Health Ledger?</h3>
+          </div>
+          <button
+            type="button"
+            id="logout-modal-close"
+            class="utility-close"
+            aria-label="Close logout confirmation"
+          >
+            Close
+          </button>
+        </div>
+
+        <p class="section-copy modal-copy">
+          You can always sign back in with your linked Google account or email and password.
+        </p>
+
+        <div class="utility-actions">
+          <button type="button" id="logout-cancel-button" class="secondary-button">Cancel</button>
+          <button type="button" id="logout-confirm-button" class="primary-button danger-button">
+            Confirm Logout
+          </button>
         </div>
       </div>
     </div>
