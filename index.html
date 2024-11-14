@@ -127,7 +127,7 @@
           <article class="panel quick-water-panel">
             <div class="quick-water-copy">
               <span class="toolbar-label">Water Tracking</span>
-              <h3>Today&apos;s Water</h3>
+              <h3>Today&apos;s Water Intake</h3>
               <p id="quick-water-progress" class="helper-text">0 / 8 Glasses</p>
             </div>
             <button type="button" id="quick-water-button" class="primary-button quick-water-button">
@@ -285,8 +285,10 @@
                   <textarea id="daily-notes" name="notes" rows="4" placeholder="Recovery notes, appetite, stress, training readiness..."></textarea>
                 </label>
 
-                <button type="submit" class="primary-button full-width">Save Daily Log</button>
               </form>
+              <button type="submit" form="daily-log-form" class="primary-button full-width entry-submit-button">
+                Save Daily Log
+              </button>
             </article>
 
             <article class="panel">
@@ -320,8 +322,10 @@
                   <div id="exercise-list" class="exercise-list"></div>
                 </div>
 
-                <button type="submit" class="primary-button full-width">Save Workout Log</button>
               </form>
+              <button type="submit" form="workout-log-form" class="primary-button full-width entry-submit-button">
+                Save Workout Log
+              </button>
             </article>
           </div>
         </section>
@@ -423,7 +427,7 @@
 
       <footer class="site-footer" aria-label="Site footer">
         <span class="site-footer-left">Copyright &copy; 2024</span>
-        <span class="site-footer-center">Base Version 1.1</span>
+        <span class="site-footer-center">Version 1.1.1</span>
         <span class="site-footer-right">Property of Sidakpreet Singh</span>
       </footer>
     </div>
@@ -562,7 +566,7 @@
 
         <div class="danger-zone">
           <div>
-            <h4>Delete Account</h4>
+            <h4>Delete My Account</h4>
             <p class="helper-text">
               Permanently removes your Health Ledger profile, daily logs, workouts, settings, and sign-in.
             </p>
@@ -577,7 +581,7 @@
             />
           </label>
           <button type="button" id="account-delete-button" class="danger-button">
-            Delete Account
+            Delete My Account
           </button>
         </div>
       </div>
@@ -673,14 +677,6 @@
             <span class="quote-label">Confirm Logout</span>
             <h3 id="logout-modal-title">Are you sure you want to log out from Health Ledger?</h3>
           </div>
-          <button
-            type="button"
-            id="logout-modal-close"
-            class="utility-close"
-            aria-label="Close logout confirmation"
-          >
-            Close
-          </button>
         </div>
 
         <p class="section-copy modal-copy">

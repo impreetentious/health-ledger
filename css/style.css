@@ -101,7 +101,7 @@ textarea {
   display: grid;
   grid-template-columns: minmax(210px, 280px) minmax(0, 1fr);
   gap: 1.25rem;
-  align-items: start;
+  align-items: stretch;
   margin-bottom: 1rem;
 }
 
@@ -141,6 +141,8 @@ textarea {
 }
 
 .hero-copy {
+  display: grid;
+  align-content: center;
   padding: 1rem 1.1rem 1.15rem;
 }
 
@@ -546,6 +548,24 @@ h2 {
 .entry-grid,
 .table-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.entry-grid {
+  align-items: stretch;
+}
+
+.entry-grid > .panel {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.entry-grid > .panel > .form-grid {
+  align-content: start;
+}
+
+.entry-submit-button {
+  margin-top: 1rem;
+  width: 100%;
 }
 
 .history-grid {

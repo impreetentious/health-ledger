@@ -202,7 +202,6 @@ function cacheDomReferences() {
   dom.preferencesModalCancel = document.getElementById("preferences-modal-cancel");
 
   dom.logoutModal = document.getElementById("logout-modal");
-  dom.logoutModalClose = document.getElementById("logout-modal-close");
   dom.logoutCancelButton = document.getElementById("logout-cancel-button");
   dom.logoutConfirmButton = document.getElementById("logout-confirm-button");
 
@@ -263,7 +262,6 @@ function bindEvents() {
   dom.preferencesModalClose.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
   dom.preferencesModalCancel.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
 
-  dom.logoutModalClose.addEventListener("click", () => closeUtilityModal(dom.logoutModal));
   dom.logoutCancelButton.addEventListener("click", () => closeUtilityModal(dom.logoutModal));
   dom.logoutConfirmButton.addEventListener("click", handleLogoutConfirm);
 
@@ -314,7 +312,6 @@ async function handleAuthStateChange(user) {
     await ensureUserProfile(user);
     await hydrateUserWorkspace(user.uid);
     dom.authForm.reset();
-    showStatusMessage(`Welcome back, ${getFriendlyUserName(user)}.`);
   } catch (error) {
     console.error(error);
     clearUserDataState();
@@ -1657,7 +1654,8 @@ function renderDashboard() {
   const totalWorkouts = workoutsThisWeek.length;
 
   dom.dashboardSummary.textContent =
-    `Reviewing ${selectedWeek.label} with ${dailyLogsThisWeek.length} logs......`;
+    `Reviewing ${selectedWeek.label} with ${dailyLogsThisWeek.length} daily logs and ` +
+    `${workoutsThisWeek.length} workouts.`;
 
   renderQuickWaterProgress();
   renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts);
