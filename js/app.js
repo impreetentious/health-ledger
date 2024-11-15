@@ -8,6 +8,7 @@ import {
   deleteUser,
   fetchSignInMethodsForEmail,
   getAuth,
+  getAdditionalUserInfo,
   linkWithCredential,
   onAuthStateChanged,
   reauthenticateWithCredential,
@@ -50,6 +51,9 @@ const db = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
 const OFFLINE_PREVIEW_STORAGE_KEY = "healthLedger.offlinePreview.v1";
 const MACRO_CALORIE_MARGIN = 15;
+const EMAILJS_SERVICE_ID = "ledger_email_services";
+const EMAILJS_WELCOME_TEMPLATE_ID = "ledger_welcome_email";
+const EMAILJS_LEAVING_TEMPLATE_ID = "ledger_leaving_email";
 
 googleProvider.setCustomParameters({
   prompt: "select_account",
@@ -340,7 +344,13 @@ async function handleGoogleSignIn() {
   setAuthPending(true);
 
   try {
-    await signInWithPopup(auth, googleProvider);
+    const userCredential = await signInWithPopup(auth, googleProvider);
+    const additionalUserInfo = getAdditionalUserInfo(userCredential);
+
+    if (additionalUserInfo?.isNewUser) {
+      await sendWelcomeEmailWithLoader(userCredential.user);
+    }
+
     setAuthFeedback("Google sign-in worked. Pulling your data now...", "success");
   } catch (error) {
     console.error(error);
@@ -417,6 +427,7 @@ async function submitEmailAuth(mode) {
 
     if (mode === "signup") {
       userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await sendWelcomeEmailWithLoader(userCredential.user);
       setAuthFeedback("Account created. Loading your new workspace...", "success");
     } else {
       userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -558,6 +569,40 @@ async function saveUserSettings(userSettings) {
 
   appState.userSettings = normalizedSettings;
   return normalizedSettings;
+}
+
+async function sendWelcomeEmailWithLoader(user) {
+  setLoadingState(true, "Sending your welcome email...", "Creating your workspace");
+
+  try {
+    await sendWelcomeEmail(user);
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+async function sendWelcomeEmail(user) {
+  await sendEmailJsTemplate(EMAILJS_WELCOME_TEMPLATE_ID, {
+    user_name: getFriendlyUserName(user),
+    to_email: user.email || "",
+  });
+}
+
+async function sendGoodbyeEmail(user) {
+  await sendEmailJsTemplate(EMAILJS_LEAVING_TEMPLATE_ID, {
+    name: getFriendlyUserName(user),
+    to_email: user.email || "",
+  });
+}
+
+async function sendEmailJsTemplate(templateId, templateParams) {
+  const emailClient = globalThis.emailjs;
+
+  if (!emailClient?.send) {
+    throw new Error("Email service is unavailable. Please try again once EmailJS has loaded.");
+  }
+
+  await emailClient.send(EMAILJS_SERVICE_ID, templateId, templateParams);
 }
 
 async function reauthenticateForAccountDeletion(user) {
@@ -906,7 +951,12 @@ async function handleAccountDelete() {
     return;
   }
 
-  setLoadingState(true, "Deleting account data...", "Deleting your account");
+  closeUtilityModal(dom.accountModal);
+  setLoadingState(
+    true,
+    "Permanently wiping your cloud data and finalizing profile changes...",
+    "Deleting your account"
+  );
 
   try {
     if (appState.previewMode) {
@@ -917,7 +967,6 @@ async function handleAccountDelete() {
       renderSignedOutState();
       setSessionState(null);
       setAppLocked(true);
-      closeUtilityModal(dom.accountModal);
       showStatusMessage("Offline preview account data has been deleted.");
       return;
     }
@@ -928,6 +977,7 @@ async function handleAccountDelete() {
     }
 
     await reauthenticateForAccountDeletion(user);
+    await sendGoodbyeEmail(user);
     await deleteUserWorkspace(user.uid);
     await deleteUser(user);
 
@@ -936,7 +986,7 @@ async function handleAccountDelete() {
     renderSignedOutState();
     setSessionState(null);
     setAppLocked(true);
-    closeUtilityModal(dom.accountModal);
+    setAuthFeedback("Your Health Ledger account was deleted. You can sign in again with another account.");
     showStatusMessage("Your Health Ledger account and stored data have been deleted.");
   } catch (error) {
     console.error(error);

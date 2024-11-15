@@ -44,4 +44,6 @@ health-ledger/
 > **Last Commit Date:** 13-11-2024
 > **Last Commit Time:** 10:50:39 IST (+05:30)
 > **Base Version:** 1.1.X
-> **Version:** v1.1.1
+> **Version:** v1.1.2
+
+---

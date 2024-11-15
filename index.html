@@ -6,6 +6,14 @@
     <title>Health Ledger</title>
     <link rel="stylesheet" href="css/style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script>
+      if (window.emailjs) {
+        window.emailjs.init({
+          publicKey: "Onu8MRSNXKarqzJYY",
+        });
+      }
+    </script>
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
@@ -427,7 +435,7 @@
 
       <footer class="site-footer" aria-label="Site footer">
         <span class="site-footer-left">Copyright &copy; 2024</span>
-        <span class="site-footer-center">Version 1.1.1</span>
+        <span class="site-footer-center">Version 1.1.2</span>
         <span class="site-footer-right">Property of Sidakpreet Singh</span>
       </footer>
     </div>
