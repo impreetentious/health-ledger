@@ -7,13 +7,7 @@
     <link rel="stylesheet" href="css/style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-    <script>
-      if (window.emailjs) {
-        window.emailjs.init({
-          publicKey: "Onu8MRSNXKarqzJYY",
-        });
-      }
-    </script>
+    <script src="js/runtime-config.js"></script>
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
@@ -375,9 +369,16 @@
 
               <div class="backup-block">
                 <p id="storage-status" class="helper-text"></p>
+                <input type="file" id="backup-import" accept=".json,application/json" hidden />
+                <button type="button" id="import-backup-button" class="secondary-button">
+                  Import Backup
+                </button>
                 <button type="button" id="export-backup-button" class="primary-button">
                   Export Full Backup
                 </button>
+                <p class="helper-text">
+                  Backup import merges daily logs by date, skips duplicate workouts, and restores saved targets.
+                </p>
               </div>
             </article>
           </div>
@@ -435,8 +436,8 @@
 
       <footer class="site-footer" aria-label="Site footer">
         <span class="site-footer-left">Copyright &copy; 2024</span>
-        <span class="site-footer-center">Version 1.1.2</span>
-        <span class="site-footer-right">Property of Sidakpreet Singh</span>
+        <span class="site-footer-center">Version 2.0.0</span>
+        <span class="site-footer-right">Health Ledger</span>
       </footer>
     </div>
 

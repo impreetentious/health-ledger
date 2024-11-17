@@ -1,49 +1,109 @@
 # Health Ledger
 
-A Firebase-backed, vanilla JavaScript single-page application for tracking daily health metrics and workouts.
+A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode.
+
+- `index.html` loads only `js/app.js`
+- `js/app.js` orchestrates the app and binds events
+- `js/config.js` owns deploy-time configuration and shared constants
+- `js/firebase.js` owns Firebase initialization
+- `js/auth.js` handles auth and EmailJS helpers
+- `js/db.js` owns Firestore and offline-preview persistence
+- `js/ui.js` owns visible UI state updates
+- `js/forms.js`, `js/dashboard.js`, and `js/history.js` own view-specific behavior
+- `js/utils.js` contains pure helpers
+- `js/dom.js` caches DOM references
+- `js/state.js` owns in-memory application state
 
 ## Tech Stack
 
 - HTML
 - CSS
-- Vanilla JavaScript
+- Vanilla JavaScript (ES modules)
 - Chart.js
 - Firebase Authentication
 - Cloud Firestore
+- EmailJS
 
-## Run Locally
+## Local Setup
 
-1. Clone or download the repository.
-2. Serve the project folder with any simple static server so browser module imports and Firebase Auth can load correctly.
-3. Open the served local URL in your browser.
+1. Serve the repository with a simple local web server.
+2. Set your deploy-time configuration in one of these places:
+   - edit [`js/runtime-config.js`](js/runtime-config.js) and assign `globalThis.HEALTH_LEDGER_CONFIG`
+   - or replace the placeholders in [`js/config.js`](js/config.js)
+3. Provide:
+   - Firebase web app config
+   - EmailJS public key
+   - EmailJS service and template IDs
+4. Open the served app URL in your browser.
+
+If Firebase is not configured yet, the app still loads and explains that cloud sign-in is unavailable. Offline preview mode remains available when the browser is opened from a local file or when the device is offline.
+
+Example runtime override:
+
+```js
+globalThis.HEALTH_LEDGER_CONFIG = {
+  firebase: {
+    apiKey: "...",
+    authDomain: "...",
+    projectId: "...",
+    storageBucket: "...",
+    messagingSenderId: "...",
+    appId: "...",
+  },
+  emailjs: {
+    publicKey: "...",
+    serviceId: "...",
+    welcomeTemplateId: "...",
+    leavingTemplateId: "...",
+  },
+};
+```
 
 ## Project Structure
 
 ```text
 health-ledger/
-├── assets/
 ├── css/
 │   └── style.css
 ├── js/
-│   └── app.js
+│   ├── app.js
+│   ├── auth.js
+│   ├── charts.js
+│   ├── config.js
+│   ├── dashboard.js
+│   ├── db.js
+│   ├── dom.js
+│   ├── firebase.js
+│   ├── forms.js
+│   ├── history.js
+│   ├── state.js
+│   ├── ui.js
+│   └── utils.js
 ├── index.html
 └── README.md
 ```
 
-## Notes
+## Public Repo Notes
 
-- The app stores user data in Firebase Auth + Cloud Firestore, scoped to the authenticated user.
-- `index.html` remains in the project root to stay compatible with simple static hosting setups such as Vercel.
-- The current structure leaves room for future modules such as reusable UI scripts, richer analytics, and design assets.
+- This repository is designed to be safe to publish after replacing any live provider settings with your own values.
+- Firebase web config and EmailJS public identifiers are deploy-time app configuration, not server secrets, but you should still rotate old live values before publishing.
+- Tighten Firebase Authentication, Firestore rules, and EmailJS/domain restrictions in the provider dashboards before making the repo public.
+- If you rewrite history before publishing, keep the same author email if you want GitHub contribution attribution to continue linking to your account.
 
----
+## Smoke-Test Checklist
 
-> **Version Control Protocol**
-> *Instructions for AI:* Every time you modify this repository, you MUST update the timestamp and version number below before committing your changes.
->
-> **Last Commit Date:** 13-11-2024
-> **Last Commit Time:** 10:50:39 IST (+05:30)
-> **Base Version:** 1.1.X
-> **Version:** v1.1.2
+- Auth overlay appears on load
+- Offline preview still opens when local-file auth is unavailable
+- Daily log entry saves and re-renders
+- Workout entry saves and appears in history
+- Settings update dashboard targets
+- JSON backup export and import both work
+- Charts render without module import errors
+- Profile, preferences, and logout flows still open and close correctly
 
----
+## Notes For Future Work
+
+- `js/app.js` is the only module that should coordinate across subsystems.
+- `js/auth.js` and `js/db.js` should stay free of DOM manipulation.
+- `js/utils.js` should remain side-effect-free.
+- If new features span views, add behavior-specific modules rather than growing `app.js` back into a monolith.
