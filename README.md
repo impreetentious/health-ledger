@@ -107,3 +107,14 @@ health-ledger/
 - `js/auth.js` and `js/db.js` should stay free of DOM manipulation.
 - `js/utils.js` should remain side-effect-free.
 - If new features span views, add behavior-specific modules rather than growing `app.js` back into a monolith.
+
+## AI Agent Instructions
+
+Before making any new commits, update the Version Control string in this file with the current IST time of commit (`Asia/Kolkata`).
+
+This IST timestamp rule is permanent for all future workflows, commits, and AI agents working in this repository.
+
+Follow this format for version control:
+
+* **Base Format Version:** 2.1.0
+* **Version:** `v2.1.0_2024-11-18_00:14:58` (IST)
