@@ -27,9 +27,12 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 ## Local Setup
 
 1. Serve the repository with a simple local web server.
-2. Set your deploy-time configuration in one of these places:
-   - edit [`js/runtime-config.js`](js/runtime-config.js) and assign `globalThis.HEALTH_LEDGER_CONFIG`
-   - or replace the placeholders in [`js/config.js`](js/config.js)
+2. Set your deploy-time configuration. Recommended — use the gitignored local
+   override so real values never land in a git-tracked file:
+   - copy the template: `cp js/runtime-config.local.example.js js/runtime-config.local.js`
+   - edit [`js/runtime-config.local.js`](js/runtime-config.local.js) and fill in your real values
+   Alternatively, edit the git-tracked [`js/runtime-config.js`](js/runtime-config.js) or the
+   placeholders in [`js/config.js`](js/config.js) directly — but avoid committing real values if you do.
 3. Provide:
    - Firebase web app config
    - EmailJS public key
@@ -38,7 +41,7 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 
 If Firebase is not configured yet, the app still loads and explains that cloud sign-in is unavailable. Offline preview mode remains available when the browser is opened from a local file or when the device is offline.
 
-Example runtime override:
+Example `js/runtime-config.local.js` (or `js/runtime-config.js`):
 
 ```js
 globalThis.HEALTH_LEDGER_CONFIG = {
@@ -77,6 +80,7 @@ health-ledger/
 │   ├── forms.js
 │   ├── history.js
 │   ├── runtime-config.js
+│   ├── runtime-config.local.example.js
 │   ├── state.js
 │   ├── ui.js
 │   └── utils.js
@@ -117,5 +121,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.1.1
-* **Version:** `v2.1.1_2024-11-18_01:21:19` (IST)
+* **Base Format Version:** 2.2.0
+* **Version:** `v2.2.0_2024-11-18_01:55:45` (IST)

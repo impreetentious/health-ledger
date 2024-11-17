@@ -3,3 +3,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Local runtime config override — real Firebase/EmailJS values, never committed.
+js/runtime-config.local.js
