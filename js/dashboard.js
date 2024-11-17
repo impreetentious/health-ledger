@@ -44,6 +44,10 @@ import {
  * Falls back to the signed-out placeholder state when there is no current user.
  */
 export function renderDashboard() {
+  // Direct callers (week-select change, quick-water) hit this without a view
+  // switch, so charts must be torn down here — not only in refreshCurrentView.
+  destroyAllCharts();
+
   if (!appState.currentUser) {
     clearDashboardPanels("Sign in to view your private dashboard and Firestore-backed trends.");
     return;

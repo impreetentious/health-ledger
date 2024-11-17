@@ -258,8 +258,23 @@ async function handleAuthStateChange(user) {
     syncWorkspaceUiFromState();
   } catch (error) {
     console.error(error);
+
+    // Sign out so a retry actually re-fires onAuthStateChanged. Without this,
+    // signing back in as the same user is a no-op and the app stays locked
+    // until a manual reload. The signOut recursion clears local state as a
+    // side effect; the calls after it override the default null-user copy.
+    if (isFirebaseConfigured()) {
+      try {
+        await performSignOut();
+      } catch (signOutError) {
+        console.error(signOutError);
+      }
+    }
+
+    appState.currentUser = null;
     clearUserDataState();
     renderSignedOutState();
+    setSessionState(null);
     setAppLocked(true);
     setAuthFeedback("We couldn't load your data right now. Please try signing in again.", "error");
     showStatusMessage(

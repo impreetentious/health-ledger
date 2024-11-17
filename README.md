@@ -2,7 +2,7 @@
 
 A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode.
 
-- `index.html` loads only `js/app.js`
+- `index.html` loads Chart.js, EmailJS, and runtime configuration before its `js/app.js` entry module
 - `js/app.js` orchestrates the app and binds events
 - `js/config.js` owns deploy-time configuration and shared constants
 - `js/firebase.js` owns Firebase initialization
@@ -76,6 +76,7 @@ health-ledger/
 │   ├── firebase.js
 │   ├── forms.js
 │   ├── history.js
+│   ├── runtime-config.js
 │   ├── state.js
 │   ├── ui.js
 │   └── utils.js
@@ -116,5 +117,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.1.0
-* **Version:** `v2.1.0_2024-11-18_00:14:58` (IST)
+* **Base Format Version:** 2.1.1
+* **Version:** `v2.1.1_2024-11-18_01:21:19` (IST)

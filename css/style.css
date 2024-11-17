@@ -753,23 +753,24 @@ textarea:focus {
 }
 
 .danger-button {
-  border: 1px solid rgba(255, 133, 133, 0.36);
+  border: 0;
   border-radius: 999px;
   padding: 0.9rem 1.15rem;
-  background: rgba(255, 133, 133, 0.14);
-  color: #ffdede;
+  background: linear-gradient(135deg, rgba(255, 133, 133, 0.96), rgba(255, 102, 102, 0.96));
+  color: #180404;
   font-weight: 700;
+  box-shadow: 0 18px 38px rgba(255, 102, 102, 0.2);
   cursor: pointer;
   transition:
     transform 220ms ease,
-    border-color 220ms ease,
-    background-color 220ms ease;
+    box-shadow 220ms ease,
+    filter 220ms ease;
 }
 
 .danger-button:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 133, 133, 0.56);
-  background: rgba(255, 133, 133, 0.2);
+  filter: brightness(1.06);
+  box-shadow: 0 22px 46px rgba(255, 102, 102, 0.28);
 }
 
 .nested-section,
@@ -858,8 +859,10 @@ th {
   inset: 0;
   z-index: 20;
   display: grid;
-  place-items: center;
+  place-items: safe center;
   padding: 1.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .app-loading {
@@ -979,12 +982,6 @@ th {
   justify-content: flex-end;
   gap: 0.85rem;
   flex-wrap: wrap;
-}
-
-.danger-button {
-  background: linear-gradient(135deg, rgba(255, 133, 133, 0.96), rgba(255, 102, 102, 0.96));
-  color: #180404;
-  box-shadow: 0 18px 38px rgba(255, 102, 102, 0.2);
 }
 
 .auth-copy h2 {
