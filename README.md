@@ -37,7 +37,10 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
    - Firebase web app config
    - EmailJS public key
    - EmailJS service and template IDs
-4. Open the served app URL in your browser.
+4. Deploy [`firestore.rules`](firestore.rules) to the same Firebase project before
+   allowing real accounts. The rules restrict every `users/{uid}` workspace path
+   to its authenticated owner.
+5. Open the served app URL in your browser.
 
 If Firebase is not configured yet, the app still loads and explains that cloud sign-in is unavailable. Offline preview mode remains available when the browser is opened from a local file or when the device is offline.
 
@@ -52,6 +55,9 @@ globalThis.HEALTH_LEDGER_CONFIG = {
     storageBucket: "...",
     messagingSenderId: "...",
     appId: "...",
+    // Optional and intentionally off by default: only enable on a trusted
+    // personal device because Firestore's browser cache survives sessions.
+    enableOfflinePersistence: false,
   },
   emailjs: {
     publicKey: "...",
@@ -61,6 +67,16 @@ globalThis.HEALTH_LEDGER_CONFIG = {
   },
 };
 ```
+
+### Firestore offline cache
+
+The app can use Firestore's persistent browser cache for instant warm starts
+and queued writes during short network interruptions. It is intentionally
+**off by default** because this is health data and the cache survives browser
+sessions. Set `firebase.enableOfflinePersistence: true` only for a trusted
+personal device; supported browsers coordinate multiple tabs automatically.
+This cloud cache is separate from Offline Preview mode, which remains a local,
+explicit preview workspace.
 
 ## Project Structure
 
@@ -93,6 +109,7 @@ health-ledger/
 - This repository is designed to be safe to publish after replacing any live provider settings with your own values.
 - Firebase web config and EmailJS public identifiers are deploy-time app configuration, not server secrets, but you should still rotate old live values before publishing.
 - Tighten Firebase Authentication, Firestore rules, and EmailJS/domain restrictions in the provider dashboards before making the repo public.
+- The repository's baseline per-user Firestore policy is versioned in [`firestore.rules`](firestore.rules); deploy and review it alongside any data-model change.
 - If you rewrite history before publishing, keep the same author email if you want GitHub contribution attribution to continue linking to your account.
 
 ## Smoke-Test Checklist
@@ -104,6 +121,7 @@ health-ledger/
 - Settings update dashboard targets
 - JSON backup export and import both work
 - Charts render without module import errors
+- If explicitly enabled on a trusted device, a reload can hydrate the Firestore cache offline
 - Profile, preferences, and logout flows still open and close correctly
 
 ## Notes For Future Work
@@ -121,5 +139,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.2.2
-* **Version:** `v2.2.2_2024-11-18_22:50:31` (IST)
+* **Base Format Version:** 2.3.0
+* **Version:** `v2.3.0_2024-11-19_01:10:43` (IST)

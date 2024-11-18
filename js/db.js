@@ -11,6 +11,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -25,6 +26,8 @@ import {
   upsertDailyLogInState,
   upsertWorkoutLogInState,
   getExistingDailyLog,
+  removeDailyLogFromState,
+  removeWorkoutLogFromState,
 } from "./state.js";
 import {
   normalizeDailyLog,
@@ -44,6 +47,10 @@ import {
   OFFLINE_PREVIEW_STORAGE_KEY,
   LOCAL_WORKSPACE_SCHEMA_VERSION,
 } from "./config.js";
+
+// Keep comfortably below Firestore's 500-operation transaction/batch limit.
+// This leaves room for a future import to add related metadata atomically.
+const FIRESTORE_BATCH_SIZE = 450;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Private — Firestore document / collection reference builders
@@ -67,6 +74,10 @@ function getUserDailyLogDoc(uid, logId) {
 
 function getUserWorkoutLogsCollection(uid) {
   return collection(db, "users", uid, "workoutLogs");
+}
+
+function getUserWorkoutLogDoc(uid, logId) {
+  return doc(db, "users", uid, "workoutLogs", logId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,9 +166,78 @@ export async function saveDailyLog(dailyLog, { replace = false } = {}) {
 }
 
 /**
- * Appends a new workout log document to Firestore.
- * Each workout gets its own auto-generated document ID (stored as `id` on the
- * returned object so delete operations can address it later).
+ * Imports daily logs in deterministic, bounded batches.
+ *
+ * Repeated dates in one source are folded in source order before any write, so
+ * the final row wins only for fields it supplies and can never race another
+ * write to the same Firestore document. State is advanced after each committed
+ * batch; if a later batch fails, callers receive the exact persisted count.
+ */
+export async function importDailyLogs(dailyLogs) {
+  const user = requireAuthenticatedUser();
+  const mergedByDate = new Map();
+
+  for (const incomingLog of dailyLogs) {
+    const existingLog = mergedByDate.get(incomingLog.date)
+      ?? getExistingDailyLog(incomingLog.date)
+      ?? createEmptyDailyLog(incomingLog.date);
+    const normalizedLog = normalizeDailyLog(mergeDailyLogs(existingLog, incomingLog));
+    mergedByDate.set(normalizedLog.date, normalizedLog);
+  }
+
+  const logs = [...mergedByDate.values()];
+  const duplicateRows = dailyLogs.length - logs.length;
+
+  if (appState.previewMode) {
+    const previousLogs = appState.dailyLogs;
+    try {
+      logs.forEach(upsertDailyLogInState);
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.dailyLogs = previousLogs;
+      throw createPartialImportError(
+        "Preview import could not be saved to browser storage; no rows were imported.",
+        { dailyImported: 0, workoutImported: 0, workoutSkipped: 0 },
+        error,
+      );
+    }
+
+    return { dailyImported: logs.length, duplicateRows };
+  }
+
+  assertFirebaseConfigured();
+  let dailyImported = 0;
+
+  try {
+    for (let index = 0; index < logs.length; index += FIRESTORE_BATCH_SIZE) {
+      const chunk = logs.slice(index, index + FIRESTORE_BATCH_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((log) => {
+        batch.set(
+          getUserDailyLogDoc(user.uid, log.date),
+          clonePlainData(log),
+          { merge: true },
+        );
+      });
+      await batch.commit();
+      chunk.forEach(upsertDailyLogInState);
+      dailyImported += chunk.length;
+    }
+  } catch (error) {
+    throw createPartialImportError(
+      "The CSV import stopped before every row could be saved.",
+      { dailyImported, workoutImported: 0, workoutSkipped: 0 },
+      error,
+    );
+  }
+
+  return { dailyImported, duplicateRows };
+}
+
+/**
+ * Creates a workout log or replaces an existing one when it carries an `id`.
+ * New cloud logs receive an auto-generated Firestore document ID; the returned
+ * object always carries it so future edits/deletes address the same session.
  */
 export async function saveWorkoutLog(workoutLog) {
   const user          = requireAuthenticatedUser();
@@ -177,13 +257,66 @@ export async function saveWorkoutLog(workoutLog) {
   }
 
   assertFirebaseConfigured();
-  // Strip the local `id` field before writing; Firestore assigns its own.
   const { id, ...payload } = normalizedLog;
-  const docRef  = await addDoc(getUserWorkoutLogsCollection(user.uid), clonePlainData(payload));
-  const savedLog = { ...normalizedLog, id: docRef.id };
+  let savedLog;
+
+  if (id) {
+    await setDoc(getUserWorkoutLogDoc(user.uid, id), clonePlainData(payload));
+    savedLog = normalizedLog;
+  } else {
+    const docRef = await addDoc(getUserWorkoutLogsCollection(user.uid), clonePlainData(payload));
+    savedLog = { ...normalizedLog, id: docRef.id };
+  }
 
   upsertWorkoutLogInState(savedLog);
   return savedLog;
+}
+
+/** Deletes one daily log by its date-backed document ID. */
+export async function deleteDailyLog(date) {
+  const user = requireAuthenticatedUser();
+  const existingLog = getExistingDailyLog(date);
+  if (!existingLog) return false;
+
+  if (appState.previewMode) {
+    const previousLogs = appState.dailyLogs;
+    removeDailyLogFromState(date);
+    try {
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.dailyLogs = previousLogs;
+      throw error;
+    }
+    return true;
+  }
+
+  assertFirebaseConfigured();
+  await deleteDoc(getUserDailyLogDoc(user.uid, date));
+  removeDailyLogFromState(date);
+  return true;
+}
+
+/** Deletes one workout log by its stable Firestore/offline ID. */
+export async function deleteWorkoutLog(id) {
+  const user = requireAuthenticatedUser();
+  if (!id || !appState.workoutLogs.some((log) => log.id === id)) return false;
+
+  if (appState.previewMode) {
+    const previousLogs = appState.workoutLogs;
+    removeWorkoutLogFromState(id);
+    try {
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.workoutLogs = previousLogs;
+      throw error;
+    }
+    return true;
+  }
+
+  assertFirebaseConfigured();
+  await deleteDoc(getUserWorkoutLogDoc(user.uid, id));
+  removeWorkoutLogFromState(id);
+  return true;
 }
 
 /** Persists the user's preference/target settings to Firestore. */
@@ -280,8 +413,25 @@ export function readOfflinePreviewWorkspace() {
   try {
     const raw    = localStorage.getItem(OFFLINE_PREVIEW_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
+
+    if (
+      parsed
+      && typeof parsed === "object"
+      && !Array.isArray(parsed)
+      && Object.hasOwn(parsed, "schemaVersion")
+      && parsed.schemaVersion !== 1
+      && parsed.schemaVersion !== LOCAL_WORKSPACE_SCHEMA_VERSION
+    ) {
+      throw new Error(
+        "This offline preview was created by an unsupported app version. Its stored data was left untouched."
+      );
+    }
+
     return normalizeWorkspacePayload(parsed);
   } catch (error) {
+    if (error.message?.includes("unsupported app version")) {
+      throw error;
+    }
     console.error("readOfflinePreviewWorkspace:", error);
     return normalizeWorkspacePayload();
   }
@@ -337,27 +487,40 @@ export async function importWorkspaceBackup(backupPayload) {
   let workoutImported = 0;
   let workoutSkipped = 0;
 
-  for (const log of normalizedBackup.dailyLogs) {
-    await saveDailyLog(log);
-    dailyImported += 1;
-  }
+  try {
+    const dailyResult = await importDailyLogs(normalizedBackup.dailyLogs);
+    dailyImported = dailyResult.dailyImported;
 
-  for (const workout of normalizedBackup.workoutLogs) {
-    const signature = getWorkoutSignature(workout);
-    if (existingWorkoutSignatures.has(signature)) {
-      workoutSkipped += 1;
-      continue;
+    const uniqueWorkouts = [];
+    for (const workout of normalizedBackup.workoutLogs) {
+      const signature = getWorkoutSignature(workout);
+      if (existingWorkoutSignatures.has(signature)) {
+        workoutSkipped += 1;
+        continue;
+      }
+
+      existingWorkoutSignatures.add(signature);
+      uniqueWorkouts.push(normalizeWorkoutLog(workout));
     }
 
-    await saveWorkoutLog(workout);
-    existingWorkoutSignatures.add(signature);
-    workoutImported += 1;
-  }
+    workoutImported = await importWorkoutLogs(uniqueWorkouts);
 
-  // Only restore targets the backup actually carried; otherwise a logs-only
-  // file would reset the user's saved settings to defaults.
-  if (normalizedBackup.hasUserSettings) {
-    await saveUserSettings(normalizedBackup.userSettings);
+    // Only restore targets the backup actually carried; otherwise a logs-only
+    // file would reset the user's saved settings to defaults.
+    if (normalizedBackup.hasUserSettings) {
+      await saveUserSettings(normalizedBackup.userSettings);
+    }
+  } catch (error) {
+    const progress = error.importProgress || {};
+    throw createPartialImportError(
+      "The backup import stopped before every item could be saved.",
+      {
+        dailyImported: Math.max(progress.dailyImported ?? 0, dailyImported),
+        workoutImported: Math.max(progress.workoutImported ?? 0, workoutImported),
+        workoutSkipped,
+      },
+      error,
+    );
   }
 
   return {
@@ -366,4 +529,67 @@ export async function importWorkspaceBackup(backupPayload) {
     workoutImported,
     workoutSkipped,
   };
+}
+
+/** Writes unique backup workouts in bounded batches and keeps state truthful on partial failure. */
+async function importWorkoutLogs(workouts) {
+  if (workouts.length === 0) return 0;
+
+  const user = requireAuthenticatedUser();
+
+  if (appState.previewMode) {
+    const previousLogs = appState.workoutLogs;
+    const savedWorkouts = workouts.map((workout) => ({
+      ...workout,
+      id: workout.id || generateOfflineId(),
+    }));
+
+    try {
+      savedWorkouts.forEach(upsertWorkoutLogInState);
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.workoutLogs = previousLogs;
+      throw createPartialImportError(
+        "Preview import could not be saved to browser storage; no workouts were imported.",
+        { dailyImported: 0, workoutImported: 0, workoutSkipped: 0 },
+        error,
+      );
+    }
+
+    return savedWorkouts.length;
+  }
+
+  assertFirebaseConfigured();
+  let workoutImported = 0;
+
+  try {
+    for (let index = 0; index < workouts.length; index += FIRESTORE_BATCH_SIZE) {
+      const chunk = workouts.slice(index, index + FIRESTORE_BATCH_SIZE);
+      const batch = writeBatch(db);
+      const savedWorkouts = chunk.map((workout) => {
+        const docRef = doc(getUserWorkoutLogsCollection(user.uid));
+        const { id, ...payload } = workout;
+        batch.set(docRef, clonePlainData(payload));
+        return { ...workout, id: docRef.id };
+      });
+      await batch.commit();
+      savedWorkouts.forEach(upsertWorkoutLogInState);
+      workoutImported += savedWorkouts.length;
+    }
+  } catch (error) {
+    throw createPartialImportError(
+      "The backup import stopped before every workout could be saved.",
+      { dailyImported: 0, workoutImported, workoutSkipped: 0 },
+      error,
+    );
+  }
+
+  return workoutImported;
+}
+
+function createPartialImportError(message, importProgress, cause) {
+  const error = new Error(message, { cause });
+  error.name = "PartialImportError";
+  error.importProgress = importProgress;
+  return error;
 }

@@ -48,7 +48,26 @@ export function upsertDailyLogInState(dailyLog) {
 }
 
 export function upsertWorkoutLogInState(workoutLog) {
-  appState.workoutLogs = [...appState.workoutLogs, workoutLog].sort(sortByDateAsc);
+  const nextLogs = [...appState.workoutLogs];
+  const existingIndex = workoutLog.id
+    ? nextLogs.findIndex((log) => log.id === workoutLog.id)
+    : -1;
+
+  if (existingIndex >= 0) {
+    nextLogs[existingIndex] = workoutLog;
+  } else {
+    nextLogs.push(workoutLog);
+  }
+
+  appState.workoutLogs = nextLogs.sort(sortByDateAsc);
+}
+
+export function removeDailyLogFromState(date) {
+  appState.dailyLogs = appState.dailyLogs.filter((log) => log.date !== date);
+}
+
+export function removeWorkoutLogFromState(id) {
+  appState.workoutLogs = appState.workoutLogs.filter((log) => log.id !== id);
 }
 
 export function clearUserDataState() {

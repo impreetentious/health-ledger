@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function ownsWorkspace(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Each workspace and every nested document belongs exclusively to the
+    // authenticated user whose UID names the top-level document.
+    match /users/{uid} {
+      allow read, write: if ownsWorkspace(uid);
+
+      match /{document=**} {
+        allow read, write: if ownsWorkspace(uid);
+      }
+    }
+  }
+}

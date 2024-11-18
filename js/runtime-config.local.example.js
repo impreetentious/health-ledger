@@ -21,6 +21,9 @@ globalThis.HEALTH_LEDGER_CONFIG.firebase = {
   storageBucket: "REPLACE_WITH_FIREBASE_STORAGE_BUCKET",
   messagingSenderId: "REPLACE_WITH_FIREBASE_MESSAGING_SENDER_ID",
   appId: "REPLACE_WITH_FIREBASE_APP_ID",
+  // Set true only on a trusted personal device. This leaves a local Firestore
+  // cache on the browser after sign-out so warm starts and offline writes work.
+  enableOfflinePersistence: false,
 };
 
 globalThis.HEALTH_LEDGER_CONFIG.emailjs = {

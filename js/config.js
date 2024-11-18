@@ -23,6 +23,10 @@ export const OFFLINE_PREVIEW_STORAGE_KEY = "healthLedger.offlinePreview.v1";
 export const MACRO_CALORIE_MARGIN = 15;
 export const LOCAL_WORKSPACE_SCHEMA_VERSION = 2;
 export const BACKUP_SCHEMA_VERSION = 4;
+// Health records are sensitive. Persistent Firestore cache is intentionally an
+// explicit deploy-time opt-in for a trusted personal device, never a default.
+export const FIRESTORE_OFFLINE_PERSISTENCE_ENABLED =
+  runtimeConfig.firestore?.enableOfflinePersistence === true;
 export const EMAILJS_PUBLIC_KEY = resolveConfigValue(
   runtimeConfig.emailjs?.publicKey,
   "REPLACE_WITH_EMAILJS_PUBLIC_KEY"
