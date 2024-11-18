@@ -17,7 +17,7 @@ import {
   getLocalDateString,
   shouldOfferOfflinePreview,
 } from "./utils.js";
-import { DAILY_QUOTES } from "./config.js";
+import { DAILY_QUOTES, isFirebaseConfigured } from "./config.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Session / profile strip
@@ -210,15 +210,18 @@ export function setDailyQuote() {
 }
 
 /**
- * Shows or hides the offline preview block in the auth overlay based on
- * whether the app is being served from a local file or the device is offline.
- * Also sets the initial auth feedback message when offline preview is relevant.
+ * Shows or hides the offline preview block in the auth overlay.
+ * Preview is offered when the app runs from a local file, the device is
+ * offline, or Firebase is not configured — in that last case the auth copy
+ * already points users at preview, so the button must actually be there.
+ * Also sets the initial auth feedback message for the local-context case.
  */
 export function configureOfflinePreviewUi() {
-  const isAvailable = shouldOfferOfflinePreview();
+  const isLocalContext = shouldOfferOfflinePreview();
+  const isAvailable = isLocalContext || !isFirebaseConfigured();
   dom.offlinePreviewBlock.hidden = !isAvailable;
 
-  if (isAvailable) {
+  if (isLocalContext) {
     dom.offlinePreviewCopy.textContent =
       "This local file preview cannot complete Firebase sign-in reliably. " +
       "You can still open Health Ledger in offline preview mode and keep test data in this browser.";
@@ -226,5 +229,9 @@ export function configureOfflinePreviewUi() {
       "Use a local server for real Firebase sign-in, or continue in offline preview mode here.",
       "error",
     );
+  } else if (isAvailable) {
+    dom.offlinePreviewCopy.textContent =
+      "Cloud sign-in is unavailable because Firebase is not configured in this copy. " +
+      "You can open Health Ledger in offline preview mode and keep test data in this browser.";
   }
 }

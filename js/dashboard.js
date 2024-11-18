@@ -23,6 +23,7 @@ import {
   getFriendlyUserName,
   getLocalDateString,
 } from "./utils.js";
+import { showStatusMessage } from "./ui.js";
 import {
   destroyAllCharts,
   renderWeightChart,
@@ -84,13 +85,25 @@ export function renderDashboard() {
   renderQuickWaterProgress();
   renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts);
   renderAlertCards(dailyLogs, selectedWeek, settings);
-  renderWeightChart(dailyLogs, selectedWeek);
-  renderCalorieChart(dailyLogsThisWeek, selectedWeek, settings.calorieTarget);
-  renderProteinChart(dailyLogsThisWeek, selectedWeek, settings.proteinGramTarget);
-  renderStepsChart(dailyLogsThisWeek, selectedWeek);
-  renderWaterChart(dailyLogsThisWeek, selectedWeek, settings);
-  renderMacroChart(dailyLogsThisWeek, settings.macroTarget);
-  renderVolumeChart(workoutsThisWeek);
+
+  // Chart drawing is contained so a missing Chart.js global (blocked CDN)
+  // degrades to blank chart panels instead of bubbling into the hydration
+  // recovery path in app.js, which would sign the user out and blame Firestore.
+  try {
+    renderWeightChart(dailyLogs, selectedWeek);
+    renderCalorieChart(dailyLogsThisWeek, selectedWeek, settings.calorieTarget);
+    renderProteinChart(dailyLogsThisWeek, selectedWeek, settings.proteinGramTarget);
+    renderStepsChart(dailyLogsThisWeek, selectedWeek);
+    renderWaterChart(dailyLogsThisWeek, selectedWeek, settings);
+    renderMacroChart(dailyLogsThisWeek, settings.macroTarget);
+    renderVolumeChart(workoutsThisWeek);
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(
+      "Your data is loaded, but the charts could not be drawn (Chart.js failed to load). Check your connection and reload to retry.",
+      true
+    );
+  }
 }
 
 /**
@@ -222,19 +235,31 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
       ? ((previousWeightAverage - currentWeightAverage) / previousWeightAverage) * 100
       : null;
 
+  // Threshold is target-relative rather than a fixed floor: it tracks the
+  // user's own configured calorieTarget so the warning stays meaningful for
+  // both cutting and bulking goals and never invents a global health rule.
+  const calorieShortfallRatio = 0.8;
+  const calorieFloor = isNumber(settings.calorieTarget) && settings.calorieTarget > 0
+    ? settings.calorieTarget * calorieShortfallRatio
+    : null;
+
   const alerts = [
-    isNumber(currentCalories) && currentCalories < 1750
+    isNumber(currentCalories) && isNumber(calorieFloor) && currentCalories < calorieFloor
       ? {
           tone: "warning",
           title: "Low Average Calories",
           value: `${Math.round(currentCalories)} kcal`,
-          detail: "Average intake for the selected week is below 1750 kcal.",
+          detail:
+            `Average intake for the selected week is trending well below your target of ` +
+            `${Math.round(settings.calorieTarget)} kcal.`,
         }
       : {
           tone: "ok",
           title: "Calorie Intake",
           value: isNumber(currentCalories) ? `${Math.round(currentCalories)} kcal` : "No data",
-          detail: "No low-calorie warning is active for this week.",
+          detail: isNumber(calorieFloor)
+            ? `Tracking against your ${Math.round(settings.calorieTarget)} kcal target.`
+            : "Set a calorie target in Preferences to enable this warning.",
         },
     isNumber(weightLossPercent) && weightLossPercent > 1
       ? {
