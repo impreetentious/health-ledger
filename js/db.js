@@ -116,10 +116,15 @@ export async function hydrateUserWorkspace(uid) {
  * Saves (or merges) a daily log for the given date.
  * Uses the date string as the Firestore document ID so each date has exactly
  * one document. Partial objects are merged on top of any existing data.
+ *
+ * Pass `replace: true` for full-form saves: the incoming log is treated as
+ * the complete record for that date, so fields the user cleared become null
+ * instead of silently keeping their old values. Partial writers (quick-water,
+ * CSV import, backup import) keep the default merge semantics.
  */
-export async function saveDailyLog(dailyLog) {
+export async function saveDailyLog(dailyLog, { replace = false } = {}) {
   const user        = requireAuthenticatedUser();
-  const existingLog = getExistingDailyLog(dailyLog.date);
+  const existingLog = replace ? null : getExistingDailyLog(dailyLog.date);
   const mergedLog   = mergeDailyLogs(
     existingLog ?? createEmptyDailyLog(dailyLog.date),
     dailyLog,
@@ -127,8 +132,14 @@ export async function saveDailyLog(dailyLog) {
   const normalizedLog = normalizeDailyLog(mergedLog);
 
   if (appState.previewMode) {
+    const previousLogs = appState.dailyLogs;
     upsertDailyLogInState(normalizedLog);
-    persistOfflinePreviewWorkspace();
+    try {
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.dailyLogs = previousLogs;
+      throw error;
+    }
     return normalizedLog;
   }
 
@@ -154,8 +165,14 @@ export async function saveWorkoutLog(workoutLog) {
 
   if (appState.previewMode) {
     const savedLog = { ...normalizedLog, id: normalizedLog.id || generateOfflineId() };
+    const previousLogs = appState.workoutLogs;
     upsertWorkoutLogInState(savedLog);
-    persistOfflinePreviewWorkspace();
+    try {
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.workoutLogs = previousLogs;
+      throw error;
+    }
     return savedLog;
   }
 
@@ -175,8 +192,14 @@ export async function saveUserSettings(userSettings) {
   const normalizedSettings = normalizeUserSettings(userSettings);
 
   if (appState.previewMode) {
+    const previousSettings = appState.userSettings;
     appState.userSettings = normalizedSettings;
-    persistOfflinePreviewWorkspace();
+    try {
+      persistOfflinePreviewWorkspace();
+    } catch (error) {
+      appState.userSettings = previousSettings;
+      throw error;
+    }
     return normalizedSettings;
   }
 
@@ -268,6 +291,10 @@ export function readOfflinePreviewWorkspace() {
  * Serialises the current appState to localStorage.
  * No-ops when not in preview mode so it can be called unconditionally by
  * save helpers.
+ *
+ * Throws a user-readable Error when the write fails (quota, blocked storage)
+ * so callers can roll back and report the failure — swallowing it here would
+ * let saves claim success for data that vanishes on reload.
  */
 export function persistOfflinePreviewWorkspace() {
   if (!appState.previewMode) return;
@@ -289,6 +316,9 @@ export function persistOfflinePreviewWorkspace() {
     );
   } catch (error) {
     console.error("persistOfflinePreviewWorkspace:", error);
+    throw new Error(
+      "Preview data could not be saved to browser storage (it may be full or blocked), so this change was not stored."
+    );
   }
 }
 
@@ -324,7 +354,11 @@ export async function importWorkspaceBackup(backupPayload) {
     workoutImported += 1;
   }
 
-  await saveUserSettings(normalizedBackup.userSettings);
+  // Only restore targets the backup actually carried; otherwise a logs-only
+  // file would reset the user's saved settings to defaults.
+  if (normalizedBackup.hasUserSettings) {
+    await saveUserSettings(normalizedBackup.userSettings);
+  }
 
   return {
     version: normalizedBackup.version,

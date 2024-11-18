@@ -56,13 +56,34 @@ export function shiftDateString(dateString, offsetDays) {
 }
 
 /**
+ * Returns true only for a real calendar date in YYYY-MM-DD form.
+ * Rejects impossible dates like 2024-02-31 that a shape-only regex accepts —
+ * these strings become Firestore document IDs, so they must be real dates.
+ */
+export function isValidIsoDateString(value) {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+/**
  * Normalises a raw CSV date value to YYYY-MM-DD.
  * Accepts already-normalised strings and anything Date can parse.
- * Returns null if the value is empty or unparseable.
+ * Returns null if the value is empty, unparseable, or not a real calendar date.
  */
 export function normalizeCsvDate(value) {
   if (!value) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return isValidIsoDateString(trimmed) ? trimmed : null;
+  }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return getLocalDateString(parsed);
@@ -450,8 +471,17 @@ export function normalizeWorkspacePayload(payload = {}) {
   };
 }
 
-/** Parses a JSON backup payload and rejects versions newer than this app supports. */
+/**
+ * Parses a JSON backup payload and rejects versions newer than this app
+ * supports. Throws on anything that is not a recognizable Health Ledger
+ * backup — without the envelope check, any JSON object (even `{}`) would
+ * normalize into default settings and silently overwrite the user's targets.
+ */
 export function normalizeBackupPayload(payload = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("That file is not a Health Ledger backup. Expected a JSON backup object.");
+  }
+
   const version = toNumberOrNull(payload.version ?? payload.schemaVersion) ?? 1;
 
   if (version > BACKUP_SCHEMA_VERSION) {
@@ -460,12 +490,52 @@ export function normalizeBackupPayload(payload = {}) {
     );
   }
 
+  const hasUserSettings = Object.hasOwn(payload, "userSettings");
+  if (!hasUserSettings && !Object.hasOwn(payload, "dailyLogs") && !Object.hasOwn(payload, "workoutLogs")) {
+    throw new Error(
+      "That file is not a Health Ledger backup — it has no settings, daily logs, or workout logs."
+    );
+  }
+
+  if (Object.hasOwn(payload, "dailyLogs") && !Array.isArray(payload.dailyLogs)) {
+    throw new Error('Invalid backup: "dailyLogs" must be an array.');
+  }
+  if (Object.hasOwn(payload, "workoutLogs") && !Array.isArray(payload.workoutLogs)) {
+    throw new Error('Invalid backup: "workoutLogs" must be an array.');
+  }
+  if (
+    hasUserSettings &&
+    (typeof payload.userSettings !== "object" ||
+      payload.userSettings === null ||
+      Array.isArray(payload.userSettings))
+  ) {
+    throw new Error('Invalid backup: "userSettings" must be an object.');
+  }
+
+  // Dates become Firestore document IDs and week-grouping keys, so every
+  // entry must carry a real calendar date before any write happens.
+  (payload.dailyLogs || []).forEach((log, index) => {
+    if (!log || typeof log !== "object" || !isValidIsoDateString(log.date)) {
+      throw new Error(
+        `Invalid backup: daily log entry ${index + 1} is missing a valid YYYY-MM-DD date.`
+      );
+    }
+  });
+  (payload.workoutLogs || []).forEach((log, index) => {
+    if (!log || typeof log !== "object" || !isValidIsoDateString(log.date)) {
+      throw new Error(
+        `Invalid backup: workout entry ${index + 1} is missing a valid YYYY-MM-DD date.`
+      );
+    }
+  });
+
   const workspace = normalizeWorkspacePayload(payload);
 
   return {
     version,
     exportedAt: payload.exportedAt || "",
     user: payload.user || null,
+    hasUserSettings,
     ...workspace,
   };
 }
@@ -508,7 +578,10 @@ export function buildMacroPayloadFromInputs(
   macroMode  = "percentage",
   isPreview  = false,
 ) {
+  // hasCalories requires > 0 because percentage math divides by calories;
+  // an explicit 0 (e.g. a fasting day) is still a valid value to store.
   const hasCalories  = isNumber(calories) && calories > 0;
+  const storableCalories = isNumber(calories) && calories >= 0 ? calories : null;
   const hasProtein   = isNumber(proteinInput);
   const hasCarbs     = isNumber(carbInput);
   const hasFat       = isNumber(fatInput);
@@ -517,7 +590,7 @@ export function buildMacroPayloadFromInputs(
 
   if (!hasAnyMacro) {
     return {
-      calories:         hasCalories ? calories : null,
+      calories:         storableCalories,
       macros:           { protein: null, carbs: null, fat: null },
       macroPercentages: { protein: null, carbs: null, fat: null },
       assignedPercent:  null,

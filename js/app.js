@@ -527,7 +527,9 @@ async function handleDailyLogSubmit(event) {
   setLoadingState(true, `Saving daily log for ${dailyLog.date}...`);
 
   try {
-    await saveDailyLog(dailyLog);
+    // The form is fully populated from the existing log, so it is the
+    // complete record for this date — replace so cleared fields actually clear.
+    await saveDailyLog(dailyLog, { replace: true });
     renderHistoryTables();
     renderStorageStatus();
     showStatusMessage(`Saved daily log for ${dailyLog.date}.`);
@@ -708,12 +710,18 @@ async function handleAccountSubmit(event) {
 
   try {
     if (appState.previewMode) {
+      const previousUser = appState.currentUser;
       appState.currentUser = {
         ...appState.currentUser,
         displayName: displayName || "Offline Preview",
         photoURL: photoURL || "",
       };
-      persistOfflinePreviewWorkspace();
+      try {
+        persistOfflinePreviewWorkspace();
+      } catch (persistError) {
+        appState.currentUser = previousUser;
+        throw persistError;
+      }
       setSessionState(appState.currentUser);
       refreshCurrentView(getActiveViewName());
       closeUtilityModal(dom.accountModal);
