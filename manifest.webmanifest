@@ -1,0 +1,18 @@
+{
+  "name": "Health Ledger",
+  "short_name": "Health Ledger",
+  "description": "A private health and training tracker for daily logs, habits, and progress trends.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07100e",
+  "theme_color": "#12251f",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

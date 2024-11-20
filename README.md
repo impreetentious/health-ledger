@@ -23,6 +23,7 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 - Firebase Authentication
 - Cloud Firestore
 - EmailJS
+- Progressive Web App shell (manifest + service worker)
 
 ## Local Setup
 
@@ -95,11 +96,15 @@ health-ledger/
 │   ├── firebase.js
 │   ├── forms.js
 │   ├── history.js
+│   ├── pwa.js
 │   ├── runtime-config.js
 │   ├── runtime-config.local.example.js
 │   ├── state.js
 │   ├── ui.js
 │   └── utils.js
+├── favicon.svg
+├── manifest.webmanifest
+├── service-worker.js
 ├── index.html
 └── README.md
 ```
@@ -139,5 +144,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.3.0
-* **Version:** `v2.3.0_2024-11-19_01:10:43` (IST)
+* **Base Format Version:** 2.3.1
+* **Version:** `v2.3.1_2024-11-20_22:26:25` (IST)
