@@ -19,6 +19,20 @@ import {
 } from "./utils.js";
 import { DAILY_QUOTES, isFirebaseConfigured } from "./config.js";
 
+let activeBlockingLoads = 0;
+let confirmationResolver = null;
+let activeDialog = null;
+let dialogRestoreTarget = null;
+const buttonStates = new WeakMap();
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Session / profile strip
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,10 +92,40 @@ export function setLoadingState(
   message = "Working...",
   title   = "Syncing Health Ledger",
 ) {
-  document.body.classList.toggle("app-busy", isVisible);
-  dom.loadingOverlay.hidden  = !isVisible;
-  dom.loadingLabel.textContent = title;
-  dom.loadingCopy.textContent  = message;
+  activeBlockingLoads = isVisible
+    ? activeBlockingLoads + 1
+    : Math.max(0, activeBlockingLoads - 1);
+
+  if (isVisible) {
+    dom.loadingLabel.textContent = title;
+    dom.loadingCopy.textContent  = message;
+  }
+
+  dom.loadingOverlay.hidden = activeBlockingLoads === 0;
+}
+
+/**
+ * Marks a local action control busy without freezing the entire application.
+ * Its original disabled state is restored exactly when the action settles.
+ */
+export function setButtonLoading(button, isLoading) {
+  if (!button) return;
+
+  if (isLoading) {
+    if (!buttonStates.has(button)) {
+      buttonStates.set(button, { disabled: button.disabled });
+    }
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    return;
+  }
+
+  const originalState = buttonStates.get(button);
+  button.disabled = originalState?.disabled ?? false;
+  button.classList.remove("is-loading");
+  button.removeAttribute("aria-busy");
+  buttonStates.delete(button);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,7 +139,10 @@ export function setLoadingState(
 export function setAppLocked(isLocked) {
   document.body.classList.toggle("auth-locked", isLocked);
   dom.authOverlay.hidden = !isLocked;
-  if (isLocked) closeTransientUi();
+  if (isLocked) {
+    closeTransientUi();
+    focusDialog(dom.authOverlay);
+  }
 }
 
 /**
@@ -106,6 +153,14 @@ export function setAuthFeedback(message, tone = "") {
   dom.authFeedback.textContent = message;
   dom.authFeedback.className   = "auth-feedback";
   if (tone) dom.authFeedback.classList.add(tone);
+}
+
+/** Writes field-level auth validation errors without relying on native bubbles. */
+export function setAuthFieldErrors({ email = "", password = "" } = {}) {
+  dom.authEmailError.textContent = email;
+  dom.authPasswordError.textContent = password;
+  dom.authEmail.setAttribute("aria-invalid", String(Boolean(email)));
+  dom.authPassword.setAttribute("aria-invalid", String(Boolean(password)));
 }
 
 /**
@@ -121,30 +176,57 @@ export function setAuthPending(isPending) {
     dom.googleSigninButton,
     dom.emailSigninButton,
     dom.emailSignupButton,
+    dom.passwordResetButton,
+    dom.passwordVisibilityButton,
     dom.offlinePreviewButton,
   ].forEach((el) => { el.disabled = isPending; });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Status message bar
+// Toast notifications
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Shows the status bar with either an info (accent) or error (danger) style. */
+/** Shows an auto-dismissing notification. Hovering or focusing pins it for manual dismissal. */
 export function showStatusMessage(message, isError = false) {
-  dom.statusMessage.textContent = message;
-  dom.statusMessage.classList.add("visible");
-  dom.statusMessage.style.background   = isError
-    ? "rgba(255, 133, 133, 0.12)"
-    : "rgba(104, 228, 255, 0.12)";
-  dom.statusMessage.style.borderColor  = isError
-    ? "rgba(255, 133, 133, 0.22)"
-    : "rgba(104, 228, 255, 0.2)";
+  const toast = document.createElement("div");
+  const text = document.createElement("span");
+  const dismiss = document.createElement("button");
+  let timeoutId = null;
+
+  toast.className = `toast ${isError ? "toast--error" : "toast--info"}`;
+  toast.setAttribute("role", isError ? "alert" : "status");
+  text.className = "toast__message";
+  text.textContent = message;
+  dismiss.type = "button";
+  dismiss.className = "toast__dismiss";
+  dismiss.setAttribute("aria-label", "Dismiss notification");
+  dismiss.textContent = "Dismiss";
+
+  const removeToast = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    toast.remove();
+  };
+  const scheduleDismissal = () => {
+    timeoutId = window.setTimeout(removeToast, 4000);
+  };
+
+  toast.addEventListener("mouseenter", () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = null;
+  });
+  toast.addEventListener("focusin", () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = null;
+  });
+  dismiss.addEventListener("click", removeToast);
+  toast.append(text, dismiss);
+  dom.toastRegion.appendChild(toast);
+  scheduleDismissal();
 }
 
-/** Hides and clears the status bar. */
+/** Hides and clears all pending notifications. */
 export function clearStatusMessage() {
-  dom.statusMessage.textContent = "";
-  dom.statusMessage.classList.remove("visible");
+  dom.toastRegion.replaceChildren();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,24 +248,136 @@ export function setProfileMenuOpen(isOpen) {
  * Collapses any other open transient UI first so only one is ever visible.
  */
 export function openUtilityModal(modal) {
+  const returnTarget = getDialogReturnTarget();
   closeTransientUi();
-  modal.hidden = false;
+  showDialog(modal, returnTarget);
 }
 
 /** Closes a utility modal by hiding it. */
 export function closeUtilityModal(modal) {
-  modal.hidden = true;
+  hideDialog(modal);
+}
+
+/** Opens the shared in-app confirmation dialog and resolves with the user's choice. */
+export function requestConfirmation({
+  eyebrow = "Confirm action",
+  title,
+  message,
+  confirmLabel = "Confirm",
+  danger = false,
+}) {
+  const returnTarget = getDialogReturnTarget();
+  closeTransientUi();
+  dom.confirmationEyebrow.textContent = eyebrow;
+  dom.confirmationTitle.textContent = title;
+  dom.confirmationMessage.textContent = message;
+  dom.confirmationConfirmButton.textContent = confirmLabel;
+  dom.confirmationConfirmButton.classList.toggle("danger-button", danger);
+
+  return new Promise((resolve) => {
+    confirmationResolver = resolve;
+    showDialog(dom.confirmationModal, returnTarget, dom.confirmationConfirmButton);
+  });
+}
+
+/** Settles the currently open shared confirmation dialog, if any. */
+export function settleConfirmation(isConfirmed) {
+  const resolve = confirmationResolver;
+  confirmationResolver = null;
+  hideDialog(dom.confirmationModal);
+  resolve?.(isConfirmed);
 }
 
 /**
  * Collapses every piece of transient UI simultaneously:
- * profile menu + all three modals.
+ * profile menu + all utility and confirmation modals.
  */
 export function closeTransientUi() {
   setProfileMenuOpen(false);
-  dom.accountModal.hidden     = true;
-  dom.preferencesModal.hidden = true;
-  dom.logoutModal.hidden      = true;
+  hideDialog(dom.accountModal, { restoreFocus: false });
+  hideDialog(dom.preferencesModal, { restoreFocus: false });
+  hideDialog(dom.logoutModal, { restoreFocus: false });
+  if (!dom.confirmationModal.hidden || confirmationResolver) {
+    const resolve = confirmationResolver;
+    confirmationResolver = null;
+    hideDialog(dom.confirmationModal, { restoreFocus: false });
+    resolve?.(false);
+  }
+}
+
+/** Keeps keyboard focus inside the currently visible dialog. */
+export function handleDialogFocusTrap(event) {
+  if (event.key !== "Tab") return;
+
+  const dialog = getCurrentDialog();
+  if (!dialog) return;
+
+  const focusable = getFocusableElements(dialog);
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function showDialog(modal, returnTarget, preferredFocus = null) {
+  activeDialog = modal;
+  dialogRestoreTarget = returnTarget;
+  modal.hidden = false;
+  focusDialog(modal, preferredFocus);
+}
+
+function hideDialog(modal, { restoreFocus = true } = {}) {
+  const wasActiveDialog = activeDialog === modal;
+  modal.hidden = true;
+
+  if (!wasActiveDialog) return;
+
+  activeDialog = null;
+  const restoreTarget = dialogRestoreTarget;
+  dialogRestoreTarget = null;
+  if (restoreFocus) restoreDialogFocus(restoreTarget);
+}
+
+function getCurrentDialog() {
+  if (activeDialog && !activeDialog.hidden) return activeDialog;
+  return dom.authOverlay.hidden ? null : dom.authOverlay;
+}
+
+function getDialogReturnTarget() {
+  if (activeDialog && dialogRestoreTarget) return dialogRestoreTarget;
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement) || !focused.isConnected) return null;
+  return dom.profileMenu.contains(focused) ? dom.profileTrigger : focused;
+}
+
+function focusDialog(dialog, preferredFocus = null) {
+  window.requestAnimationFrame(() => {
+    if (dialog.hidden) return;
+    const focusTarget = preferredFocus || getFocusableElements(dialog)[0] || dialog;
+    focusTarget.focus({ preventScroll: true });
+  });
+}
+
+function restoreDialogFocus(target) {
+  if (!(target instanceof HTMLElement) || !target.isConnected || target.closest("[hidden]")) return;
+  target.focus({ preventScroll: true });
+}
+
+function getFocusableElements(container) {
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter((element) => {
+    return element instanceof HTMLElement && !element.closest("[hidden]");
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
