@@ -34,6 +34,7 @@ import {
   getGoogleCredentialFromError,
   sendWelcomeEmail,
   sendGoodbyeEmail,
+  sendPasswordResetLink,
 } from "./auth.js";
 
 import {
@@ -42,6 +43,9 @@ import {
   saveWorkoutLog,
   saveUserSettings,
   importWorkspaceBackup,
+  importDailyLogs,
+  deleteDailyLog,
+  deleteWorkoutLog,
   ensureUserProfile,
   deleteUserWorkspace,
   readOfflinePreviewWorkspace,
@@ -53,21 +57,34 @@ import {
   setLoadingState,
   setAppLocked,
   setAuthFeedback,
+  setAuthFieldErrors,
   setAuthPending,
   showStatusMessage,
   clearStatusMessage,
+  setButtonLoading,
   setDailyQuote,
   configureOfflinePreviewUi,
   setProfileMenuOpen,
   openUtilityModal,
   closeUtilityModal,
+  requestConfirmation,
+  settleConfirmation,
   closeTransientUi,
   getActiveViewName,
+  handleDialogFocusTrap,
 } from "./ui.js";
 
-import { renderDashboard, clearDashboardPanels } from "./dashboard.js";
-import { renderHistoryTables, renderStorageStatus, handleBackupExport } from "./history.js";
+import { renderDashboard, clearDashboardPanels, setDashboardHydrationState } from "./dashboard.js";
+import {
+  renderHistoryTables,
+  renderStorageStatus,
+  handleBackupExport,
+  applyHistoryFiltersFromControls,
+  clearHistoryFilters,
+  loadMoreHistory,
+} from "./history.js";
 import { destroyAllCharts } from "./charts.js";
+import { registerServiceWorker } from "./pwa.js";
 
 import {
   seedFormDates,
@@ -75,6 +92,8 @@ import {
   updateNutritionPreview,
   updateMacroInputMode,
   resetWorkoutForm,
+  populateWorkoutForm,
+  populateExerciseNameSuggestions,
   addExerciseCard,
   collectExercisesFromForm,
   populateSettingsForm,
@@ -91,10 +110,6 @@ import {
   parseLegacyCsv,
   getLocalDateString,
   normalizeEmail,
-  normalizeUserSettings,
-  normalizeDailyLog,
-  normalizeWorkoutLog,
-  sortByDateAsc,
   getCurrentWeekKey,
   buildOfflinePreviewUser,
   shouldOfferOfflinePreview,
@@ -117,6 +132,7 @@ document.addEventListener("DOMContentLoaded", initializeInterface);
 
 function initializeInterface() {
   cacheDomReferences();
+  registerServiceWorker();
   initializeEmailService();
   bindEvents();
   seedFormDates();
@@ -126,8 +142,6 @@ function initializeInterface() {
   configureOfflinePreviewUi();
   setAppLocked(true);
   renderSignedOutState();
-  setLoadingState(true, "Checking your secure session...");
-
   if (!isFirebaseConfigured()) {
     setAuthFeedback(
       "Cloud sign-in is not configured in this public copy yet. Add your Firebase web app values in js/config.js, or use offline preview for local testing.",
@@ -170,10 +184,20 @@ function bindEvents() {
   dom.backupImport.addEventListener("change", handleBackupImport);
   dom.exportBackupButton.addEventListener("click", handleBackupExport);
   dom.addExerciseButton.addEventListener("click", () => addExerciseCard());
+  dom.repeatLastWorkoutButton.addEventListener("click", handleRepeatLastWorkout);
+  [dom.historyDateFrom, dom.historyDateTo].forEach((input) => {
+    input.addEventListener("change", applyHistoryFiltersFromControls);
+  });
+  dom.historySearch.addEventListener("input", applyHistoryFiltersFromControls);
+  dom.clearHistoryFiltersButton.addEventListener("click", clearHistoryFilters);
+  dom.dailyHistoryLoadMore.addEventListener("click", () => loadMoreHistory("daily"));
+  dom.workoutHistoryLoadMore.addEventListener("click", () => loadMoreHistory("workout"));
 
   dom.googleSigninButton.addEventListener("click", handleGoogleSignIn);
   dom.authForm.addEventListener("submit", handleEmailSignIn);
   dom.emailSignupButton.addEventListener("click", handleEmailSignUp);
+  dom.passwordResetButton.addEventListener("click", handlePasswordReset);
+  dom.passwordVisibilityButton.addEventListener("click", togglePasswordVisibility);
   dom.offlinePreviewButton.addEventListener("click", handleOfflinePreviewStart);
   dom.profileAvatarImage.addEventListener("error", () => {
     dom.profileAvatarImage.hidden = true;
@@ -197,7 +221,11 @@ function bindEvents() {
   dom.logoutCancelButton.addEventListener("click", () => closeUtilityModal(dom.logoutModal));
   dom.logoutConfirmButton.addEventListener("click", handleLogoutConfirm);
 
+  dom.confirmationCancelButton.addEventListener("click", () => settleConfirmation(false));
+  dom.confirmationConfirmButton.addEventListener("click", () => settleConfirmation(true));
+
   document.addEventListener("click", handleDocumentClick);
+  document.addEventListener("keydown", handleDialogFocusTrap);
   document.addEventListener("keydown", handleGlobalKeydown);
 }
 
@@ -218,6 +246,7 @@ async function handleAuthStateChange(user) {
   setAuthPending(false);
 
   if (!user) {
+    setDashboardHydrationState(false);
     appState.currentUser = null;
     clearPendingGoogleLink();
     clearUserDataState();
@@ -234,6 +263,11 @@ async function handleAuthStateChange(user) {
       );
     }
     dom.authForm.reset();
+    setAuthFieldErrors();
+    dom.authPassword.type = "password";
+    dom.passwordVisibilityButton.textContent = "Show";
+    dom.passwordVisibilityButton.setAttribute("aria-pressed", "false");
+    dom.passwordVisibilityButton.setAttribute("aria-label", "Show password");
     if (hadUser) {
       showStatusMessage("You signed out of Health Ledger.");
     }
@@ -250,6 +284,7 @@ async function handleAuthStateChange(user) {
     `Loading ${getFriendlyUserName(user)}'s dashboard...`,
     `Welcome, ${getFriendlyUserName(user)}`
   );
+  setDashboardHydrationState(true);
 
   try {
     await ensureUserProfile(user);
@@ -282,6 +317,7 @@ async function handleAuthStateChange(user) {
       true
     );
   } finally {
+    setDashboardHydrationState(false);
     setLoadingState(false);
   }
 }
@@ -308,7 +344,7 @@ async function handleGoogleSignIn() {
     const { user, isNewUser } = await signInWithGoogle();
 
     if (isNewUser) {
-      await sendWelcomeEmailWithLoader(user);
+      await sendWelcomeEmailBestEffort(user);
     }
 
     setAuthFeedback("Google sign-in worked. Pulling your data now...", "success");
@@ -371,11 +407,24 @@ async function submitEmailAuth(mode) {
     return;
   }
 
-  const email = dom.authEmail.value.trim();
+  const email = normalizeEmail(dom.authEmail.value);
   const password = dom.authPassword.value;
 
-  if (!email || !password) {
-    setAuthFeedback("Enter both an email address and password.", "error");
+  const fieldErrors = {
+    email: !email
+      ? "Enter an email address."
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+        ? "Enter a valid email address."
+        : "",
+    password: !password
+      ? "Enter your password."
+      : password.length < 6
+        ? "Passwords must be at least 6 characters."
+        : "",
+  };
+  setAuthFieldErrors(fieldErrors);
+  if (fieldErrors.email || fieldErrors.password) {
+    setAuthFeedback("Check the highlighted email and password fields.", "error");
     return;
   }
 
@@ -385,7 +434,7 @@ async function submitEmailAuth(mode) {
   try {
     if (mode === "signup") {
       const user = await signUpWithEmail(email, password);
-      await sendWelcomeEmailWithLoader(user);
+      await sendWelcomeEmailBestEffort(user);
       setAuthFeedback("Account created. Loading your new workspace...", "success");
     } else {
       const user = await signInWithEmail(email, password);
@@ -398,6 +447,53 @@ async function submitEmailAuth(mode) {
   } finally {
     setAuthPending(false);
   }
+}
+
+async function handlePasswordReset() {
+  if (shouldOfferOfflinePreview() || !isFirebaseConfigured()) {
+    setAuthFeedback(
+      "Password reset needs a configured Firebase app on a served HTTPS or localhost origin.",
+      "error"
+    );
+    return;
+  }
+
+  const email = normalizeEmail(dom.authEmail.value);
+  const emailError = !email
+    ? "Enter the email address for the account you want to reset."
+    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      ? "Enter a valid email address."
+      : "";
+  setAuthFieldErrors({ email: emailError });
+  if (emailError) {
+    setAuthFeedback("Enter your account email to request a reset link.", "error");
+    dom.authEmail.focus();
+    return;
+  }
+
+  setAuthFeedback("");
+  setButtonLoading(dom.passwordResetButton, true);
+  try {
+    await sendPasswordResetLink(email);
+    setAuthFeedback("If an account exists for that address, Firebase has sent a password-reset link.", "success");
+  } catch (error) {
+    console.error(error);
+    setAuthFeedback(formatFirebaseError(error), "error");
+  } finally {
+    setButtonLoading(dom.passwordResetButton, false);
+  }
+}
+
+function togglePasswordVisibility() {
+  const isHidden = dom.authPassword.type === "password";
+  dom.authPassword.type = isHidden ? "text" : "password";
+  dom.passwordVisibilityButton.textContent = isHidden ? "Hide" : "Show";
+  dom.passwordVisibilityButton.setAttribute("aria-pressed", String(isHidden));
+  dom.passwordVisibilityButton.setAttribute(
+    "aria-label",
+    isHidden ? "Hide password" : "Show password"
+  );
+  dom.authPassword.focus();
 }
 
 async function handleLogoutConfirm() {
@@ -425,10 +521,8 @@ async function handleLogoutConfirm() {
   }
 }
 
-async function sendWelcomeEmailWithLoader(user) {
+async function sendWelcomeEmailBestEffort(user) {
   if (!isEmailJsConfigured()) return;
-
-  setLoadingState(true, "Sending your welcome email...", "Creating your workspace");
 
   try {
     await sendWelcomeEmail(user);
@@ -438,8 +532,6 @@ async function sendWelcomeEmailWithLoader(user) {
       "Your account is ready, but the welcome email could not be sent. Check EmailJS setup in js/config.js.",
       true
     );
-  } finally {
-    setLoadingState(false);
   }
 }
 
@@ -452,6 +544,11 @@ async function sendWelcomeEmailWithLoader(user) {
 function refreshCurrentView(viewName = "dashboard") {
   dom.navButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === viewName);
+    if (button.dataset.view === viewName) {
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.removeAttribute("aria-current");
+    }
   });
 
   dom.views.forEach((view) => {
@@ -524,7 +621,8 @@ async function handleDailyLogSubmit(event) {
     notes: dom.dailyForm.elements.notes.value.trim(),
   };
 
-  setLoadingState(true, `Saving daily log for ${dailyLog.date}...`);
+  const saveButton = event.submitter || dom.dailyForm.querySelector('button[type="submit"]');
+  setButtonLoading(saveButton, true);
 
   try {
     // The form is fully populated from the existing log, so it is the
@@ -538,7 +636,7 @@ async function handleDailyLogSubmit(event) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setLoadingState(false);
+    setButtonLoading(saveButton, false);
   }
 }
 
@@ -558,7 +656,7 @@ async function handleQuickWaterAdd() {
   const unitAmountMl =
     toNumberOrNull(existingLog.water?.unitAmountMl) ?? settings.waterUnitAmountMl;
 
-  dom.quickWaterButton.disabled = true;
+  setButtonLoading(dom.quickWaterButton, true);
 
   try {
     const savedLog = await saveDailyLog({
@@ -584,7 +682,7 @@ async function handleQuickWaterAdd() {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    dom.quickWaterButton.disabled = false;
+    setButtonLoading(dom.quickWaterButton, false);
   }
 }
 
@@ -610,27 +708,54 @@ async function handleWorkoutLogSubmit(event) {
   }
 
   const workoutLog = {
+    id: dom.workoutForm.dataset.editingWorkoutId || "",
     date: dom.workoutForm.elements.date.value,
     session_type: dom.workoutForm.elements.session_type.value.trim(),
     duration: toNumberOrNull(dom.workoutForm.elements.duration.value),
     exercises,
   };
 
-  setLoadingState(true, `Saving workout for ${workoutLog.date}...`);
+  const saveButton = event.submitter || dom.workoutForm.querySelector('button[type="submit"]');
+  setButtonLoading(saveButton, true);
 
   try {
     const savedWorkout = await saveWorkoutLog(workoutLog);
+    populateExerciseNameSuggestions(appState.workoutLogs);
+    dom.repeatLastWorkoutButton.disabled = false;
     renderHistoryTables();
     renderStorageStatus();
-    showStatusMessage(`Saved workout log for ${savedWorkout.date}.`);
+    showStatusMessage(
+      workoutLog.id
+        ? `Updated workout log for ${savedWorkout.date}.`
+        : `Saved workout log for ${savedWorkout.date}.`
+    );
     resetWorkoutForm();
     refreshCurrentView(getActiveViewName());
   } catch (error) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setLoadingState(false);
+    setButtonLoading(saveButton, false);
   }
+}
+
+function handleRepeatLastWorkout() {
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before repeating a workout.", true);
+    setAppLocked(true);
+    return;
+  }
+
+  const lastWorkout = appState.workoutLogs.at(-1);
+  if (!lastWorkout) {
+    showStatusMessage("Save a workout first, then you can repeat it here.", true);
+    return;
+  }
+
+  refreshCurrentView("entry");
+  populateWorkoutForm(lastWorkout, { isRepeat: true });
+  requestAnimationFrame(() => dom.workoutForm.elements.session_type.focus());
+  showStatusMessage(`Loaded your ${lastWorkout.date} session as a new workout for today.`);
 }
 
 /*
@@ -661,7 +786,8 @@ async function handleSettingsSubmit(event) {
     return;
   }
 
-  setLoadingState(true, "Saving your targets...");
+  const saveButton = event.submitter || dom.settingsForm.querySelector('button[type="submit"]');
+  setButtonLoading(saveButton, true);
 
   try {
     await saveUserSettings({
@@ -684,7 +810,7 @@ async function handleSettingsSubmit(event) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setLoadingState(false);
+    setButtonLoading(saveButton, false);
   }
 }
 
@@ -706,7 +832,8 @@ async function handleAccountSubmit(event) {
   const displayName = dom.accountForm.elements.displayName.value.trim();
   const photoURL = dom.accountForm.elements.photoURL.value.trim();
 
-  setLoadingState(true, "Saving account details...", "Updating your profile");
+  const saveButton = event.submitter || dom.accountForm.querySelector('button[type="submit"]');
+  setButtonLoading(saveButton, true);
 
   try {
     if (appState.previewMode) {
@@ -741,7 +868,7 @@ async function handleAccountSubmit(event) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setLoadingState(false);
+    setButtonLoading(saveButton, false);
   }
 }
 
@@ -752,15 +879,18 @@ async function handleAccountDelete() {
     return;
   }
 
-  const confirmed = window.confirm(
-    "Delete your Health Ledger account and all stored logs? This cannot be undone."
-  );
+  const confirmed = await requestConfirmation({
+    eyebrow: "Delete account",
+    title: "Delete your Health Ledger account?",
+    message: "This permanently removes your profile, daily logs, workouts, and saved targets. This cannot be undone.",
+    confirmLabel: "Delete account",
+    danger: true,
+  });
 
   if (!confirmed) {
     return;
   }
 
-  closeUtilityModal(dom.accountModal);
   setLoadingState(
     true,
     "Permanently wiping your cloud data and finalizing profile changes...",
@@ -837,20 +967,23 @@ async function handleCsvImport(event) {
   }
 
   try {
-    setLoadingState(true, `Importing ${file.name}...`);
+    setButtonLoading(dom.csvImport, true);
     const csvText = await file.text();
     const importedLogs = parseLegacyCsv(csvText);
-    await Promise.all(importedLogs.map((log) => saveDailyLog(log)));
+    const result = await importDailyLogs(importedLogs);
 
     renderHistoryTables();
     renderStorageStatus();
     refreshCurrentView(getActiveViewName());
-    showStatusMessage(`Imported ${importedLogs.length} legacy row(s) from ${file.name}.`);
+    const duplicateNote = result.duplicateRows
+      ? ` Consolidated ${result.duplicateRows} duplicate date row(s) in source order.`
+      : "";
+    showStatusMessage(`Imported ${result.dailyImported} daily log(s) from ${file.name}.${duplicateNote}`);
   } catch (error) {
     console.error(error);
-    showStatusMessage(error.message || "Unable to import that CSV file.", true);
+    showStatusMessage(describeImportFailure(error, "Unable to import that CSV file."), true);
   } finally {
-    setLoadingState(false);
+    setButtonLoading(dom.csvImport, false);
     event.target.value = "";
   }
 }
@@ -868,9 +1001,12 @@ async function handleBackupImport(event) {
     return;
   }
 
-  const confirmed = window.confirm(
-    "Import this backup into the current workspace? Daily logs will merge by date, duplicate workouts will be skipped, and saved targets will be restored."
-  );
+  const confirmed = await requestConfirmation({
+    eyebrow: "Restore backup",
+    title: "Import this backup into this workspace?",
+    message: "Daily logs will merge by date, duplicate workouts will be skipped, and saved targets will be restored.",
+    confirmLabel: "Import backup",
+  });
 
   if (!confirmed) {
     event.target.value = "";
@@ -878,7 +1014,7 @@ async function handleBackupImport(event) {
   }
 
   try {
-    setLoadingState(true, `Importing ${file.name}...`, "Restoring your backup");
+    setButtonLoading(dom.importBackupButton, true);
     const backupText = await file.text();
     const backupPayload = JSON.parse(backupText);
     const result = await importWorkspaceBackup(backupPayload);
@@ -891,9 +1027,9 @@ async function handleBackupImport(event) {
     );
   } catch (error) {
     console.error(error);
-    showStatusMessage(error.message || "Unable to import that backup file.", true);
+    showStatusMessage(describeImportFailure(error, "Unable to import that backup file."), true);
   } finally {
-    setLoadingState(false);
+    setButtonLoading(dom.importBackupButton, false);
     event.target.value = "";
   }
 }
@@ -911,6 +1047,18 @@ function handleProfileTriggerClick(event) {
 }
 
 function handleDocumentClick(event) {
+  const historyAction = event.target.closest?.("[data-history-action]");
+  if (historyAction) {
+    void handleHistoryAction(historyAction);
+    return;
+  }
+
+  const dashboardAction = event.target.closest("[data-open-dashboard-view]");
+  if (dashboardAction) {
+    refreshCurrentView(dashboardAction.dataset.openDashboardView);
+    return;
+  }
+
   if (
     !dom.profileShell.hidden &&
     !dom.profileShell.contains(event.target) &&
@@ -920,8 +1068,93 @@ function handleDocumentClick(event) {
   }
 }
 
+async function handleHistoryAction(button) {
+  if (!appState.currentUser) {
+    showStatusMessage("Sign in before changing history.", true);
+    setAppLocked(true);
+    return;
+  }
+
+  const action = button.dataset.historyAction;
+  const date = button.dataset.logDate;
+  const workoutId = button.dataset.logId;
+
+  if (action === "edit-daily" && date) {
+    refreshCurrentView("entry");
+    populateDailyFormForDate(date);
+    requestAnimationFrame(() => dom.dailyForm.elements.weight.focus());
+    showStatusMessage(`Loaded ${date} into Data Entry. Save to keep your changes.`);
+    return;
+  }
+
+  if (action === "edit-workout" && workoutId) {
+    const workout = appState.workoutLogs.find((log) => log.id === workoutId);
+    if (!workout) {
+      showStatusMessage("That workout is no longer in the current workspace. Reload history and try again.", true);
+      return;
+    }
+    refreshCurrentView("entry");
+    populateWorkoutForm(workout);
+    requestAnimationFrame(() => dom.workoutForm.elements.session_type.focus());
+    showStatusMessage(`Loaded the ${workout.date} workout. Save changes to update that session.`);
+    return;
+  }
+
+  const isDailyDelete = action === "delete-daily" && date;
+  const isWorkoutDelete = action === "delete-workout" && workoutId;
+  if (!isDailyDelete && !isWorkoutDelete) return;
+
+  const confirmed = await requestConfirmation({
+    eyebrow: "Delete entry",
+    title: isDailyDelete ? `Delete the daily log for ${date}?` : "Delete this workout log?",
+    message: isDailyDelete
+      ? "This removes the selected day from your history and charts. This cannot be undone."
+      : "This removes the selected workout session from your history and charts. This cannot be undone.",
+    confirmLabel: "Delete entry",
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  setButtonLoading(button, true);
+  try {
+    const deleted = isDailyDelete
+      ? await deleteDailyLog(date)
+      : await deleteWorkoutLog(workoutId);
+    if (!deleted) {
+      showStatusMessage("That entry was already removed.");
+      return;
+    }
+
+    if (isDailyDelete && dom.dailyForm.elements.date.value === date) {
+      populateDailyFormForDate(date);
+    }
+    if (isWorkoutDelete && dom.workoutForm.dataset.editingWorkoutId === workoutId) {
+      resetWorkoutForm();
+    }
+    if (isWorkoutDelete) {
+      populateExerciseNameSuggestions(appState.workoutLogs);
+      dom.repeatLastWorkoutButton.disabled = appState.workoutLogs.length === 0;
+    }
+
+    renderHistoryTables();
+    renderStorageStatus();
+    refreshCurrentView(getActiveViewName());
+    showStatusMessage(isDailyDelete ? `Deleted the daily log for ${date}.` : "Deleted the workout log.");
+  } catch (error) {
+    console.error(error);
+    showStatusMessage(formatFirebaseError(error), true);
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") {
+    return;
+  }
+
+  if (!dom.confirmationModal.hidden) {
+    settleConfirmation(false);
     return;
   }
 
@@ -1007,6 +1240,8 @@ async function linkPendingGoogleCredential(user) {
 
 function syncWorkspaceUiFromState() {
   populateSettingsForm();
+  populateExerciseNameSuggestions(appState.workoutLogs);
+  dom.repeatLastWorkoutButton.disabled = appState.workoutLogs.length === 0;
   resetWorkoutForm();
   populateDailyFormForDate(getLocalDateString());
   renderHistoryTables();
@@ -1016,6 +1251,7 @@ function syncWorkspaceUiFromState() {
 
 function renderSignedOutState() {
   closeTransientUi();
+  clearHistoryFilters();
   clearDashboardPanels(
     shouldOfferOfflinePreview()
       ? "Use a local server for Firebase sign-in, or continue with offline preview mode."
@@ -1026,6 +1262,8 @@ function renderSignedOutState() {
   populateSettingsForm();
   seedFormDates();
   resetWorkoutForm();
+  populateExerciseNameSuggestions([]);
+  dom.repeatLastWorkoutButton.disabled = true;
   populateDailyFormForDate(getLocalDateString());
 }
 
@@ -1038,18 +1276,17 @@ function renderSignedOutState() {
 async function handleOfflinePreviewStart() {
   setAuthFeedback("");
   setLoadingState(true, "Opening offline preview...", "Local Preview Mode");
+  setDashboardHydrationState(true);
 
   try {
     const previewState = readOfflinePreviewWorkspace();
     appState.previewMode = true;
     appState.currentUser = buildOfflinePreviewUser(previewState.profile);
-    appState.userSettings = normalizeUserSettings(previewState.userSettings);
-    appState.dailyLogs = (previewState.dailyLogs || [])
-      .map((log) => normalizeDailyLog(log))
-      .sort(sortByDateAsc);
-    appState.workoutLogs = (previewState.workoutLogs || [])
-      .map((log) => normalizeWorkoutLog(log))
-      .sort(sortByDateAsc);
+    // readOfflinePreviewWorkspace already validates, normalizes, and sorts
+    // this payload. Reusing it preserves the one canonical load contract.
+    appState.userSettings = previewState.userSettings;
+    appState.dailyLogs = previewState.dailyLogs;
+    appState.workoutLogs = previewState.workoutLogs;
     appState.selectedWeekKey = getCurrentWeekKey();
 
     setSessionState(appState.currentUser);
@@ -1058,8 +1295,23 @@ async function handleOfflinePreviewStart() {
     showStatusMessage("Offline preview is active. Data will stay in this browser.");
   } catch (error) {
     console.error(error);
-    showStatusMessage("Unable to start offline preview in this browser.", true);
+    showStatusMessage(error.message || "Unable to start offline preview in this browser.", true);
   } finally {
+    setDashboardHydrationState(false);
     setLoadingState(false);
   }
+}
+
+function describeImportFailure(error, fallbackMessage) {
+  if (!error?.importProgress) {
+    return error?.message || fallbackMessage;
+  }
+
+  const { dailyImported = 0, workoutImported = 0, workoutSkipped = 0 } = error.importProgress;
+  const savedParts = [
+    `${dailyImported} daily log(s)`,
+    `${workoutImported} workout(s)`,
+  ];
+  if (workoutSkipped) savedParts.push(`${workoutSkipped} duplicate workout(s) skipped`);
+  return `${error.message} Saved before the failure: ${savedParts.join(", ")}.`;
 }

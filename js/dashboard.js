@@ -22,6 +22,8 @@ import {
   formatNumberForDisplay,
   getFriendlyUserName,
   getLocalDateString,
+  getDateStringsInRange,
+  shiftDateString,
 } from "./utils.js";
 import { showStatusMessage } from "./ui.js";
 import {
@@ -34,6 +36,16 @@ import {
   renderMacroChart,
   renderVolumeChart,
 } from "./charts.js";
+
+const CHART_EMPTY_COPY = {
+  weight: "No weight entries are logged for this week yet.",
+  macro: "No macro entries are logged for this week yet.",
+  calories: "No calorie entries are logged for this week yet.",
+  protein: "No protein entries are logged for this week yet.",
+  steps: "No step entries are logged for this week yet.",
+  water: "No water entries are logged for this week yet.",
+  volume: "No workouts are logged for this week yet.",
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public — orchestrator
@@ -85,20 +97,51 @@ export function renderDashboard() {
   renderQuickWaterProgress();
   renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts);
   renderAlertCards(dailyLogs, selectedWeek, settings);
+  renderWeeklyInsightNarrative({
+    dailyLogsThisWeek,
+    workoutsThisWeek,
+    selectedWeek,
+    settings,
+    averageCalories,
+    averageWeight,
+  });
+  renderConsistencyPanel(dailyLogs);
+
+  const chartAvailability = {
+    weight: dailyLogsThisWeek.some((log) => isNumber(log.weight)),
+    macro: dailyLogsThisWeek.some((log) =>
+      [log.macros?.protein, log.macros?.carbs, log.macros?.fat].some(isNumber)
+    ),
+    calories: dailyLogsThisWeek.some((log) => isNumber(log.calories)),
+    protein: dailyLogsThisWeek.some((log) => isNumber(log.macros?.protein)),
+    steps: dailyLogsThisWeek.some((log) => isNumber(log.steps)),
+    water: dailyLogsThisWeek.some((log) => isNumber(log.water?.glasses)),
+    volume: workoutsThisWeek.some((log) => log.exercises?.some((exercise) => exercise.sets?.length)),
+  };
+
+  Object.entries(chartAvailability).forEach(([key, hasData]) => {
+    setChartEmptyState(key, !hasData, CHART_EMPTY_COPY[key]);
+  });
 
   // Chart drawing is contained so a missing Chart.js global (blocked CDN)
   // degrades to blank chart panels instead of bubbling into the hydration
   // recovery path in app.js, which would sign the user out and blame Firestore.
   try {
-    renderWeightChart(dailyLogs, selectedWeek);
-    renderCalorieChart(dailyLogsThisWeek, selectedWeek, settings.calorieTarget);
-    renderProteinChart(dailyLogsThisWeek, selectedWeek, settings.proteinGramTarget);
-    renderStepsChart(dailyLogsThisWeek, selectedWeek);
-    renderWaterChart(dailyLogsThisWeek, selectedWeek, settings);
-    renderMacroChart(dailyLogsThisWeek, settings.macroTarget);
-    renderVolumeChart(workoutsThisWeek);
+    if (chartAvailability.weight) renderWeightChart(dailyLogs, selectedWeek);
+    if (chartAvailability.calories) renderCalorieChart(dailyLogsThisWeek, selectedWeek, settings.calorieTarget);
+    if (chartAvailability.protein) renderProteinChart(dailyLogsThisWeek, selectedWeek, settings.proteinGramTarget);
+    if (chartAvailability.steps) renderStepsChart(dailyLogsThisWeek, selectedWeek);
+    if (chartAvailability.water) renderWaterChart(dailyLogsThisWeek, selectedWeek, settings);
+    if (chartAvailability.macro) renderMacroChart(dailyLogsThisWeek, settings.macroTarget);
+    if (chartAvailability.volume) renderVolumeChart(workoutsThisWeek);
+    animateChartPanels(chartAvailability);
   } catch (error) {
     console.error(error);
+    Object.entries(chartAvailability).forEach(([key, hasData]) => {
+      if (hasData) {
+        setChartEmptyState(key, true, "This chart could not be drawn. Reload to try again.", false);
+      }
+    });
     showStatusMessage(
       "Your data is loaded, but the charts could not be drawn (Chart.js failed to load). Check your connection and reload to retry.",
       true
@@ -119,6 +162,9 @@ export function clearDashboardPanels(message) {
   dom.dashboardWeekCaption.textContent = "Sign in to load your weekly charts.";
   dom.dashboardWeekSelect.innerHTML = `<option value="${getCurrentWeekKey()}">Current week</option>`;
   renderQuickWaterProgress();
+  Object.keys(CHART_EMPTY_COPY).forEach((key) => {
+    setChartEmptyState(key, true, "Sign in to load this chart.", false);
+  });
   dom.insightCards.innerHTML = "";
   dom.alertCards.innerHTML = `
     <article class="alert-card ok">
@@ -127,6 +173,18 @@ export function clearDashboardPanels(message) {
       <p>Your dashboard and forms unlock after Firebase Authentication confirms your session.</p>
     </article>
   `;
+  dom.weeklyInsightNarrative.textContent = "Sign in to turn your logs into a weekly summary.";
+  dom.loggingStreakCount.textContent = "—";
+  dom.consistencyCaption.textContent = "Sign in to view your last 90 days of daily logging.";
+  dom.consistencyHeatmap.replaceChildren();
+  dom.consistencyHeatmap.setAttribute("aria-label", "Sign in to view daily logging consistency.");
+}
+
+/** Shows or hides the lightweight dashboard skeleton during workspace hydration. */
+export function setDashboardHydrationState(isHydrating) {
+  dom.dashboardHydrationSkeleton.hidden = !isHydrating;
+  dom.dashboardHydrationSkeleton.setAttribute("aria-hidden", String(!isHydrating));
+  dom.dashboardView.setAttribute("aria-busy", String(isHydrating));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,9 +217,18 @@ function renderQuickWaterProgress() {
   const glasses = toNumberOrNull(todayLog?.water?.glasses) ?? 0;
   const targetGlasses =
     toNumberOrNull(todayLog?.water?.targetGlasses) ?? settings.waterTargetGlasses;
+  const safeTarget = isNumber(targetGlasses) && targetGlasses > 0 ? targetGlasses : 0;
+  const completion = safeTarget ? Math.min(Math.max(glasses / safeTarget, 0), 1) : 0;
+  const completionPercent = Math.round(completion * 100);
 
   dom.quickWaterProgress.textContent =
     `${formatNumberForDisplay(glasses)} / ${formatNumberForDisplay(targetGlasses)} Glasses`;
+  dom.quickWaterMeter.style.setProperty("--water-progress", String(completion));
+  dom.quickWaterMeterLabel.textContent = `${completionPercent}%`;
+  dom.quickWaterMeter.setAttribute(
+    "aria-label",
+    `Water progress: ${formatNumberForDisplay(glasses)} of ${formatNumberForDisplay(targetGlasses)} glasses`
+  );
   dom.quickWaterButton.disabled = !appState.currentUser;
 }
 
@@ -171,26 +238,41 @@ function renderInsightCards(averageWeight, averageCalories, averageProtein, aver
       label: "Average Weight",
       value: isNumber(averageWeight) ? `${averageWeight.toFixed(1)} kg` : "No data",
       detail: "Only logged days are counted.",
+      count: averageWeight,
+      decimals: 1,
+      suffix: " kg",
     },
     {
       label: "Average Calories",
       value: isNumber(averageCalories) ? `${Math.round(averageCalories)} kcal` : "No data",
       detail: "Empty days stay out of the math.",
+      count: averageCalories,
+      decimals: 0,
+      suffix: " kcal",
     },
     {
       label: "Average Protein",
       value: isNumber(averageProtein) ? `${Math.round(averageProtein)} g` : "No data",
       detail: "Based on logged protein only.",
+      count: averageProtein,
+      decimals: 0,
+      suffix: " g",
     },
     {
       label: "Average Steps",
       value: isNumber(averageSteps) ? `${Math.round(averageSteps)}` : "No data",
       detail: "Daily step average for the selected week.",
+      count: averageSteps,
+      decimals: 0,
+      suffix: "",
     },
     {
       label: "Total Workouts",
       value: `${totalWorkouts}`,
       detail: "Sessions inside the selected week.",
+      count: totalWorkouts,
+      decimals: 0,
+      suffix: "",
     },
   ];
 
@@ -199,12 +281,224 @@ function renderInsightCards(averageWeight, averageCalories, averageProtein, aver
       (card) => `
         <article class="stat-card">
           <span>${escapeHtml(card.label)}</span>
-          <strong>${escapeHtml(card.value)}</strong>
+          <strong
+            class="stat-value"
+            ${isNumber(card.count) ? `data-count-to="${card.count}" data-count-decimals="${card.decimals}" data-count-suffix="${card.suffix}"` : ""}
+          >${escapeHtml(card.value)}</strong>
           <p>${escapeHtml(card.detail)}</p>
         </article>
       `
     )
     .join("");
+
+  animateInsightValues();
+}
+
+function renderWeeklyInsightNarrative({
+  dailyLogsThisWeek,
+  workoutsThisWeek,
+  selectedWeek,
+  settings,
+  averageCalories,
+  averageWeight,
+}) {
+  const sentences = [];
+  const previousWeightAverage = calculateAverage(
+    filterLogsByWindow(appState.dailyLogs, getPreviousWeekInfo(selectedWeek))
+      .map((log) => log.weight)
+      .filter(isNumber)
+  );
+
+  if (isNumber(averageCalories)) {
+    const target = settings.calorieTarget;
+    if (isNumber(target) && target > 0) {
+      const targetDifference = ((averageCalories - target) / target) * 100;
+      const roundedDifference = Math.round(Math.abs(targetDifference));
+      const direction = targetDifference > 0 ? "over" : targetDifference < 0 ? "under" : "on";
+      const targetCopy = direction === "on"
+        ? "on your saved target"
+        : `${roundedDifference}% ${direction} your saved target`;
+      sentences.push(`Average intake was ${Math.round(averageCalories).toLocaleString("en-US")} kcal, ${targetCopy}.`);
+    } else {
+      sentences.push(`Average intake was ${Math.round(averageCalories).toLocaleString("en-US")} kcal.`);
+    }
+  }
+
+  if (isNumber(averageWeight) && isNumber(previousWeightAverage)) {
+    const change = averageWeight - previousWeightAverage;
+    if (Math.abs(change) < 0.05) {
+      sentences.push("Average weight was essentially steady versus the previous week.");
+    } else {
+      const direction = change > 0 ? "up" : "down";
+      sentences.push(`Average weight was ${Math.abs(change).toFixed(1)} kg ${direction} versus the previous week.`);
+    }
+  } else if (isNumber(averageWeight)) {
+    sentences.push(`Average weight was ${averageWeight.toFixed(1)} kg across the logged days.`);
+  }
+
+  if (workoutsThisWeek.length) {
+    const totalSets = workoutsThisWeek.reduce(
+      (sum, workout) => sum + (workout.exercises || []).reduce(
+        (exerciseTotal, exercise) => exerciseTotal + (exercise.sets || []).length,
+        0
+      ),
+      0
+    );
+    const sessionLabel = workoutsThisWeek.length === 1 ? "workout" : "workouts";
+    const setLabel = totalSets === 1 ? "set" : "sets";
+    sentences.push(`You logged ${workoutsThisWeek.length} ${sessionLabel} and ${totalSets} total ${setLabel}.`);
+  }
+
+  if (!sentences.length) {
+    const hasAnyLogs = dailyLogsThisWeek.length || workoutsThisWeek.length;
+    dom.weeklyInsightNarrative.textContent = hasAnyLogs
+      ? "This week has entries, but not enough of these metrics for a full trend summary yet."
+      : "Log a daily entry or workout to start building a useful weekly summary.";
+    return;
+  }
+
+  dom.weeklyInsightNarrative.textContent = sentences.join(" ");
+}
+
+function renderConsistencyPanel(dailyLogs) {
+  const today = getLocalDateString();
+  const dates = getDateStringsInRange(shiftDateString(today, -89), today);
+  const logsByDate = new Map(dailyLogs.map((log) => [log.date, log]));
+  const loggedDayCount = dates.filter((date) => logsByDate.has(date)).length;
+  let streak = 0;
+  let cursor = today;
+  while (logsByDate.has(cursor)) {
+    streak += 1;
+    cursor = shiftDateString(cursor, -1);
+  }
+
+  const fragment = document.createDocumentFragment();
+  dates.forEach((date) => {
+    const log = logsByDate.get(date);
+    const cell = document.createElement("span");
+    const detailLevel = getDailyLogDetailLevel(log);
+    cell.className = `heat-cell heat-cell--${detailLevel}`;
+    cell.setAttribute("aria-hidden", "true");
+    cell.title = log ? `${date}: logged` : `${date}: no daily log`;
+    fragment.append(cell);
+  });
+  dom.consistencyHeatmap.replaceChildren(fragment);
+  dom.consistencyHeatmap.setAttribute(
+    "aria-label",
+    `${loggedDayCount} of the last 90 days have a daily log. Current streak: ${streak} ${streak === 1 ? "day" : "days"}.`
+  );
+  dom.loggingStreakCount.textContent = `${streak} ${streak === 1 ? "day" : "days"}`;
+  dom.consistencyCaption.textContent =
+    `${loggedDayCount} of the last 90 days have a daily log. A streak counts consecutive days ending today.`;
+}
+
+function getDailyLogDetailLevel(log) {
+  if (!log) return 0;
+  const trackedValues = [
+    log.weight,
+    log.calories,
+    log.macros?.protein,
+    log.macros?.carbs,
+    log.macros?.fat,
+    log.steps,
+    log.water?.glasses,
+    log.sleep,
+    log.energy,
+  ];
+  const trackedCount = trackedValues.filter(isNumber).length + (log.notes?.trim() ? 1 : 0);
+  return Math.max(1, Math.min(4, Math.ceil(trackedCount / 2)));
+}
+
+function setChartEmptyState(key, isEmpty, message, showEntryAction = true) {
+  const canvas = {
+    weight: dom.weightChart,
+    macro: dom.macroChart,
+    calories: dom.calorieChart,
+    protein: dom.proteinChart,
+    steps: dom.stepsChart,
+    water: dom.waterChart,
+    volume: dom.volumeChart,
+  }[key];
+  if (!canvas) return;
+
+  const panel = canvas.closest(".chart-panel");
+  if (!panel) return;
+
+  let emptyState = panel.querySelector(".chart-empty-state");
+  if (!emptyState) {
+    emptyState = document.createElement("div");
+    emptyState.className = "chart-empty-state";
+    emptyState.setAttribute("role", "status");
+    const copy = document.createElement("p");
+    copy.className = "chart-empty-state-copy";
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "secondary-button chart-empty-state-action";
+    action.dataset.openDashboardView = "entry";
+    action.textContent = "Open Data Entry";
+    emptyState.append(copy, action);
+    panel.append(emptyState);
+  }
+
+  emptyState.querySelector(".chart-empty-state-copy").textContent = message;
+  emptyState.querySelector(".chart-empty-state-action").hidden = !showEntryAction;
+  emptyState.hidden = !isEmpty;
+  canvas.hidden = isEmpty;
+  panel.classList.toggle("has-chart-empty-state", isEmpty);
+}
+
+function animateInsightValues() {
+  const prefersReducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  dom.insightCards.querySelectorAll("[data-count-to]").forEach((element) => {
+    const target = Number(element.dataset.countTo);
+    const decimals = Number(element.dataset.countDecimals || 0);
+    const suffix = element.dataset.countSuffix || "";
+    if (!Number.isFinite(target)) return;
+
+    const writeValue = (value) => {
+      element.textContent = `${value.toLocaleString("en-US", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}${suffix}`;
+    };
+
+    if (prefersReducedMotion || target === 0) {
+      writeValue(target);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const duration = 460;
+    const tick = (now) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      const eased = 1 - (1 - progress) ** 3;
+      writeValue(target * eased);
+      if (progress < 1 && element.isConnected) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+function animateChartPanels(chartAvailability) {
+  if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+  Object.entries(chartAvailability).forEach(([key, hasData]) => {
+    if (!hasData) return;
+    const canvas = {
+      weight: dom.weightChart,
+      macro: dom.macroChart,
+      calories: dom.calorieChart,
+      protein: dom.proteinChart,
+      steps: dom.stepsChart,
+      water: dom.waterChart,
+      volume: dom.volumeChart,
+    }[key];
+    const panel = canvas?.closest(".chart-panel");
+    if (!panel) return;
+    panel.classList.remove("chart-panel--ready");
+    requestAnimationFrame(() => panel.classList.add("chart-panel--ready"));
+  });
 }
 
 function renderAlertCards(dailyLogs, selectedWeek, settings) {

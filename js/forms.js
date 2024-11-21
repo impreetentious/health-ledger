@@ -168,9 +168,35 @@ export function updateMacroInputMode() {
 /** Clears the workout form and seeds it with today's date and one blank exercise card. */
 export function resetWorkoutForm() {
   dom.workoutForm.reset();
+  delete dom.workoutForm.dataset.editingWorkoutId;
   dom.workoutForm.elements.date.value = getLocalDateString();
   dom.exerciseList.innerHTML = "";
   addExerciseCard();
+  dom.workoutSaveButton.textContent = "Save Workout Log";
+}
+
+/**
+ * Loads a saved workout into the entry form for editing or repeating. Passing
+ * `isRepeat: true` intentionally clears the source ID so saving creates a new
+ * session rather than mutating the original history item.
+ */
+export function populateWorkoutForm(workout, { isRepeat = false } = {}) {
+  dom.workoutForm.reset();
+  dom.exerciseList.innerHTML = "";
+  dom.workoutForm.elements.date.value = isRepeat ? getLocalDateString() : workout.date;
+  dom.workoutForm.elements.session_type.value = workout.session_type || "";
+  dom.workoutForm.elements.duration.value = valueOrEmpty(workout.duration);
+
+  if (isRepeat || !workout.id) {
+    delete dom.workoutForm.dataset.editingWorkoutId;
+    dom.workoutSaveButton.textContent = "Save Repeated Workout";
+  } else {
+    dom.workoutForm.dataset.editingWorkoutId = workout.id;
+    dom.workoutSaveButton.textContent = "Save Workout Changes";
+  }
+
+  const exercises = workout.exercises?.length ? workout.exercises : [null];
+  exercises.forEach((exercise) => addExerciseCard(exercise));
 }
 
 /**
@@ -189,7 +215,7 @@ export function addExerciseCard(exercise = null) {
     <div class="exercise-fields">
       <label>
         <span>Name</span>
-        <input type="text" class="exercise-name" placeholder="Bench Press" required />
+        <input type="text" class="exercise-name" list="exercise-name-options" placeholder="Bench Press" required />
       </label>
       <label>
         <span>Muscle Group</span>
@@ -272,6 +298,26 @@ export function collectExercisesFromForm() {
       };
     })
     .filter((exercise) => exercise.name && exercise.muscle_group && exercise.sets.length > 0);
+}
+
+/** Updates the workout form's datalist from the user's existing exercise names. */
+export function populateExerciseNameSuggestions(workoutLogs) {
+  const names = new Map();
+  workoutLogs.forEach((workout) => {
+    workout.exercises?.forEach((exercise) => {
+      const name = exercise.name?.trim();
+      if (name) names.set(name.toLocaleLowerCase(), name);
+    });
+  });
+
+  dom.exerciseNameOptions.innerHTML = "";
+  [...names.values()]
+    .sort((left, right) => left.localeCompare(right))
+    .forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      dom.exerciseNameOptions.append(option);
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="ambient ambient-left"></div>
     <div class="ambient ambient-right"></div>
 
@@ -112,17 +113,25 @@
           </article>
 
           <nav class="main-nav" aria-label="Primary">
-            <button class="nav-button active" data-view="dashboard">Dashboard</button>
+            <button class="nav-button active" data-view="dashboard" aria-current="page">Dashboard</button>
             <button class="nav-button" data-view="entry">Data Entry</button>
             <button class="nav-button" data-view="history">History</button>
           </nav>
         </div>
       </header>
 
-      <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+      <div id="toast-region" class="toast-region" aria-label="Notifications"></div>
 
-      <main class="view-stack">
+      <main id="main-content" class="view-stack" tabindex="-1">
         <section id="dashboard-view" class="view active" aria-labelledby="dashboard-heading">
+          <div id="dashboard-hydration-skeleton" class="dashboard-hydration-skeleton" hidden aria-hidden="true">
+            <span class="dashboard-skeleton-line dashboard-skeleton-line--title"></span>
+            <span class="dashboard-skeleton-line dashboard-skeleton-line--copy"></span>
+            <div class="dashboard-skeleton-cards" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="dashboard-skeleton-chart" aria-hidden="true"></div>
+          </div>
           <div class="section-heading">
             <div>
               <h2 id="dashboard-heading">Welcome to Health Ledger</h2>
@@ -149,6 +158,18 @@
               <h3>Today&apos;s Water Intake</h3>
               <p id="quick-water-progress" class="helper-text">0 / 8 Glasses</p>
             </div>
+            <div
+              id="quick-water-meter"
+              class="quick-water-meter"
+              role="img"
+              aria-label="Water progress: 0 of 8 glasses"
+            >
+              <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+                <circle class="quick-water-meter-track" cx="60" cy="60" r="48" />
+                <circle id="quick-water-meter-progress" class="quick-water-meter-progress" cx="60" cy="60" r="48" />
+              </svg>
+              <span id="quick-water-meter-label" class="quick-water-meter-label">0%</span>
+            </div>
             <button type="button" id="quick-water-button" class="primary-button quick-water-button">
               +1 Glass
             </button>
@@ -156,6 +177,38 @@
 
           <div class="stats-grid" id="insight-cards"></div>
           <div class="alerts-grid" id="alert-cards"></div>
+
+          <article class="panel weekly-narrative-panel" aria-labelledby="weekly-narrative-title">
+            <div>
+              <span class="toolbar-label">Weekly insight</span>
+              <h3 id="weekly-narrative-title">Your trend, in context</h3>
+            </div>
+            <p id="weekly-insight-narrative" class="weekly-insight-narrative" aria-live="polite"></p>
+          </article>
+
+          <article class="panel consistency-panel" aria-labelledby="consistency-title">
+            <div class="panel-header consistency-header">
+              <div>
+                <span class="toolbar-label">Consistency</span>
+                <h3 id="consistency-title">Keep the chain visible</h3>
+                <p id="consistency-caption">Your last 90 days of daily logging.</p>
+              </div>
+              <div class="streak-badge">
+                <strong id="logging-streak-count">0 days</strong>
+                <span>current streak</span>
+              </div>
+            </div>
+            <div id="consistency-heatmap" class="consistency-heatmap" role="img" aria-label="No daily logs in the last 90 days."></div>
+            <div class="consistency-legend" aria-hidden="true">
+              <span>Less</span>
+              <i class="heat-cell heat-cell--0"></i>
+              <i class="heat-cell heat-cell--1"></i>
+              <i class="heat-cell heat-cell--2"></i>
+              <i class="heat-cell heat-cell--3"></i>
+              <i class="heat-cell heat-cell--4"></i>
+              <span>More</span>
+            </div>
+          </article>
 
           <div class="chart-grid">
             <article class="panel chart-panel wide">
@@ -312,8 +365,13 @@
 
             <article class="panel">
               <div class="panel-header">
-                <h3>Workout Log</h3>
-                <p>Build a full session with multiple exercises and sets.</p>
+                <div>
+                  <h3>Workout Log</h3>
+                  <p>Build a full session with multiple exercises and sets.</p>
+                </div>
+                <button type="button" id="repeat-last-workout-button" class="secondary-button" disabled>
+                  Repeat Last Session
+                </button>
               </div>
 
               <form id="workout-log-form" class="form-grid">
@@ -339,10 +397,16 @@
                     <button type="button" id="add-exercise-button" class="secondary-button">Add Exercise</button>
                   </div>
                   <div id="exercise-list" class="exercise-list"></div>
+                  <datalist id="exercise-name-options"></datalist>
                 </div>
 
               </form>
-              <button type="submit" form="workout-log-form" class="primary-button full-width entry-submit-button">
+              <button
+                type="submit"
+                id="workout-save-button"
+                form="workout-log-form"
+                class="primary-button full-width entry-submit-button"
+              >
                 Save Workout Log
               </button>
             </article>
@@ -358,6 +422,31 @@
               Review past entries, import older data, and keep your ledger backed up.
             </p>
           </div>
+
+          <article class="panel history-filter-panel" aria-labelledby="history-filter-title">
+            <div>
+              <span class="toolbar-label">Find an entry</span>
+              <h3 id="history-filter-title">Filter history</h3>
+            </div>
+            <div class="history-filter-controls">
+              <label>
+                <span>From</span>
+                <input type="date" id="history-date-from" />
+              </label>
+              <label>
+                <span>To</span>
+                <input type="date" id="history-date-to" />
+              </label>
+              <label class="history-search-control">
+                <span>Search notes and sessions</span>
+                <input type="search" id="history-search" placeholder="e.g. recovery, upper body" />
+              </label>
+              <button type="button" id="clear-history-filters-button" class="secondary-button">
+                Clear Filters
+              </button>
+            </div>
+            <p id="history-filter-status" class="helper-text" aria-live="polite"></p>
+          </article>
 
           <div class="history-grid">
             <article class="panel">
@@ -404,7 +493,7 @@
             <article class="panel">
               <div class="panel-header">
                 <h3>Daily Log History</h3>
-                <p>Newest entries first.</p>
+                <p id="daily-history-summary">Newest entries first.</p>
               </div>
               <div class="table-wrapper">
                 <table>
@@ -420,17 +509,21 @@
                       <th>Sleep</th>
                       <th>Energy</th>
                       <th>Notes</th>
+                      <th><span class="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody id="daily-history-body"></tbody>
                 </table>
               </div>
+              <button type="button" id="daily-history-load-more" class="secondary-button history-load-more" hidden>
+                Load More Daily Logs
+              </button>
             </article>
 
             <article class="panel">
               <div class="panel-header">
                 <h3>Workout History</h3>
-                <p>Recent sessions with exercise totals.</p>
+                <p id="workout-history-summary">Recent sessions with exercise totals.</p>
               </div>
               <div class="table-wrapper">
                 <table>
@@ -441,11 +534,15 @@
                       <th>Duration</th>
                       <th>Exercises</th>
                       <th>Total Sets</th>
+                      <th><span class="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody id="workout-history-body"></tbody>
                 </table>
               </div>
+              <button type="button" id="workout-history-load-more" class="secondary-button history-load-more" hidden>
+                Load More Workouts
+              </button>
             </article>
           </div>
         </section>
@@ -453,7 +550,7 @@
 
       <footer class="site-footer" aria-label="Site footer">
         <span class="site-footer-left">Copyright &copy; 2024</span>
-        <span class="site-footer-center">Version 2.3.2</span>
+        <span class="site-footer-center">Version 2.3.3</span>
         <span class="site-footer-right">Health Ledger</span>
       </footer>
     </div>
@@ -472,6 +569,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="auth-title"
+      tabindex="-1"
     >
       <div class="auth-panel">
         <div class="auth-copy">
@@ -492,7 +590,7 @@
             <span>or continue with email</span>
           </div>
 
-          <form id="auth-form" class="auth-form">
+          <form id="auth-form" class="auth-form" novalidate>
             <label>
               <span>Email</span>
               <input
@@ -501,21 +599,30 @@
                 name="email"
                 autocomplete="email"
                 placeholder="you@example.com"
+                aria-describedby="auth-email-error"
                 required
               />
             </label>
+            <p id="auth-email-error" class="field-feedback" aria-live="polite"></p>
             <label>
               <span>Password</span>
-              <input
-                type="password"
-                id="auth-password"
-                name="password"
-                autocomplete="current-password"
-                placeholder="Minimum 6 characters"
-                minlength="6"
-                required
-              />
+              <span class="password-field">
+                <input
+                  type="password"
+                  id="auth-password"
+                  name="password"
+                  autocomplete="current-password"
+                  placeholder="Minimum 6 characters"
+                  aria-describedby="auth-password-error"
+                  minlength="6"
+                  required
+                />
+                <button type="button" id="password-visibility-button" class="password-visibility-button" aria-pressed="false" aria-label="Show password">
+                  Show
+                </button>
+              </span>
             </label>
+            <p id="auth-password-error" class="field-feedback" aria-live="polite"></p>
 
             <div class="auth-actions">
               <button type="submit" id="email-signin-button" class="primary-button">
@@ -525,6 +632,9 @@
                 Create Account
               </button>
             </div>
+            <button type="button" id="password-reset-button" class="text-button auth-reset-button">
+              Forgot password?
+            </button>
           </form>
 
           <p id="auth-feedback" class="auth-feedback" aria-live="polite"></p>
@@ -547,6 +657,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="account-modal-title"
+      tabindex="-1"
       hidden
     >
       <div class="utility-modal-card">
@@ -619,6 +730,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="preferences-modal-title"
+      tabindex="-1"
       hidden
     >
       <div class="utility-modal-card wide-modal-card">
@@ -695,6 +807,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="logout-modal-title"
+      tabindex="-1"
       hidden
     >
       <div class="utility-modal-card compact-modal-card">
@@ -714,6 +827,33 @@
           <button type="button" id="logout-confirm-button" class="primary-button danger-button">
             Confirm Logout
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="confirmation-modal"
+      class="utility-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirmation-title"
+      aria-describedby="confirmation-message"
+      tabindex="-1"
+      hidden
+    >
+      <div class="utility-modal-card compact-modal-card">
+        <div class="utility-modal-header">
+          <div>
+            <span id="confirmation-eyebrow" class="quote-label">Confirm action</span>
+            <h3 id="confirmation-title">Confirm this action?</h3>
+          </div>
+        </div>
+
+        <p id="confirmation-message" class="section-copy modal-copy"></p>
+
+        <div class="utility-actions">
+          <button type="button" id="confirmation-cancel-button" class="secondary-button">Cancel</button>
+          <button type="button" id="confirmation-confirm-button" class="primary-button">Confirm</button>
         </div>
       </div>
     </div>

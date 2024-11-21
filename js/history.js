@@ -25,6 +25,55 @@ import { BACKUP_SCHEMA_VERSION } from "./config.js";
 // History tables
 // ─────────────────────────────────────────────────────────────────────────────
 
+const HISTORY_PAGE_SIZE = 30;
+
+const historyFilters = {
+  from: "",
+  to: "",
+  query: "",
+  dailyVisible: HISTORY_PAGE_SIZE,
+  workoutVisible: HISTORY_PAGE_SIZE,
+};
+
+/**
+ * Reads the filter controls, normalises their values, and returns both history
+ * record types to their first page. Date inputs provide valid ISO strings in
+ * normal use; trimming here also keeps programmatic callers harmless.
+ */
+export function applyHistoryFiltersFromControls() {
+  historyFilters.from = dom.historyDateFrom.value.trim();
+  historyFilters.to = dom.historyDateTo.value.trim();
+  historyFilters.query = dom.historySearch.value.trim().toLocaleLowerCase();
+  historyFilters.dailyVisible = HISTORY_PAGE_SIZE;
+  historyFilters.workoutVisible = HISTORY_PAGE_SIZE;
+  renderHistoryTables();
+}
+
+/** Clears all history controls and returns both tables to their first page. */
+export function clearHistoryFilters() {
+  historyFilters.from = "";
+  historyFilters.to = "";
+  historyFilters.query = "";
+  historyFilters.dailyVisible = HISTORY_PAGE_SIZE;
+  historyFilters.workoutVisible = HISTORY_PAGE_SIZE;
+  dom.historyDateFrom.value = "";
+  dom.historyDateTo.value = "";
+  dom.historySearch.value = "";
+  renderHistoryTables();
+}
+
+/** Reveals the next bounded page for one history table. */
+export function loadMoreHistory(logType) {
+  if (logType === "daily") {
+    historyFilters.dailyVisible += HISTORY_PAGE_SIZE;
+  } else if (logType === "workout") {
+    historyFilters.workoutVisible += HISTORY_PAGE_SIZE;
+  } else {
+    return;
+  }
+  renderHistoryTables();
+}
+
 /** Renders both the daily log and workout history tables, newest first. */
 export function renderHistoryTables() {
   const dailyLogs = [...appState.dailyLogs].sort(sortByDateDesc);
@@ -32,14 +81,25 @@ export function renderHistoryTables() {
 
   if (!appState.currentUser) {
     dom.dailyHistoryBody.innerHTML =
-      `<tr><td colspan="10" class="empty-state">Sign in to load daily history.</td></tr>`;
+      `<tr><td colspan="11" class="empty-state">Sign in to load daily history.</td></tr>`;
     dom.workoutHistoryBody.innerHTML =
-      `<tr><td colspan="5" class="empty-state">Sign in to load workout history.</td></tr>`;
+      `<tr><td colspan="6" class="empty-state">Sign in to load workout history.</td></tr>`;
+    dom.dailyHistorySummary.textContent = "Sign in to load daily history.";
+    dom.workoutHistorySummary.textContent = "Sign in to load workout history.";
+    dom.historyFilterStatus.textContent = "Sign in to filter your private history.";
+    dom.dailyHistoryLoadMore.hidden = true;
+    dom.workoutHistoryLoadMore.hidden = true;
     return;
   }
 
-  dom.dailyHistoryBody.innerHTML = dailyLogs.length
-    ? dailyLogs
+  const hasInvalidRange = Boolean(historyFilters.from && historyFilters.to && historyFilters.from > historyFilters.to);
+  const filteredDailyLogs = hasInvalidRange ? [] : dailyLogs.filter(matchesDailyHistoryFilters);
+  const filteredWorkoutLogs = hasInvalidRange ? [] : workoutLogs.filter(matchesWorkoutHistoryFilters);
+  const visibleDailyLogs = filteredDailyLogs.slice(0, historyFilters.dailyVisible);
+  const visibleWorkoutLogs = filteredWorkoutLogs.slice(0, historyFilters.workoutVisible);
+
+  dom.dailyHistoryBody.innerHTML = visibleDailyLogs.length
+    ? visibleDailyLogs
         .map(
           (log) => `
             <tr>
@@ -53,14 +113,20 @@ export function renderHistoryTables() {
               <td>${formatMaybeNumber(log.sleep)}</td>
               <td>${formatMaybeNumber(log.energy)}</td>
               <td>${escapeHtml(log.notes || "-")}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="secondary-button table-action" data-history-action="edit-daily" data-log-date="${escapeHtml(log.date)}">Edit</button>
+                  <button type="button" class="danger-button table-action" data-history-action="delete-daily" data-log-date="${escapeHtml(log.date)}">Delete</button>
+                </div>
+              </td>
             </tr>
           `
         )
         .join("")
-    : `<tr><td colspan="10" class="empty-state">No daily logs saved yet.</td></tr>`;
+    : `<tr><td colspan="11" class="empty-state">${getDailyEmptyMessage(dailyLogs.length, hasInvalidRange)}</td></tr>`;
 
-  dom.workoutHistoryBody.innerHTML = workoutLogs.length
-    ? workoutLogs
+  dom.workoutHistoryBody.innerHTML = visibleWorkoutLogs.length
+    ? visibleWorkoutLogs
         .map((log) => {
           const totalSets = log.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
           return `
@@ -70,11 +136,91 @@ export function renderHistoryTables() {
               <td>${formatMaybeNumber(log.duration)} min</td>
               <td>${escapeHtml(String(log.exercises.length))}</td>
               <td>${escapeHtml(String(totalSets))}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="secondary-button table-action" data-history-action="edit-workout" data-log-id="${escapeHtml(log.id)}">Edit</button>
+                  <button type="button" class="danger-button table-action" data-history-action="delete-workout" data-log-id="${escapeHtml(log.id)}">Delete</button>
+                </div>
+              </td>
             </tr>
           `;
         })
         .join("")
-    : `<tr><td colspan="5" class="empty-state">No workout logs saved yet.</td></tr>`;
+    : `<tr><td colspan="6" class="empty-state">${getWorkoutEmptyMessage(workoutLogs.length, hasInvalidRange)}</td></tr>`;
+
+  updateHistoryPagination({
+    dailyTotal: filteredDailyLogs.length,
+    workoutTotal: filteredWorkoutLogs.length,
+    dailyShown: visibleDailyLogs.length,
+    workoutShown: visibleWorkoutLogs.length,
+    hasInvalidRange,
+  });
+}
+
+function matchesDailyHistoryFilters(log) {
+  if (!matchesDateRange(log.date)) return false;
+  if (!historyFilters.query) return true;
+  return String(log.notes || "").toLocaleLowerCase().includes(historyFilters.query);
+}
+
+function matchesWorkoutHistoryFilters(log) {
+  if (!matchesDateRange(log.date)) return false;
+  if (!historyFilters.query) return true;
+  const searchableWorkout = [
+    log.session_type,
+    ...(log.exercises || []).flatMap((exercise) => [exercise.name, exercise.muscle_group]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+  return searchableWorkout.includes(historyFilters.query);
+}
+
+function matchesDateRange(date) {
+  return (
+    (!historyFilters.from || date >= historyFilters.from) &&
+    (!historyFilters.to || date <= historyFilters.to)
+  );
+}
+
+function getDailyEmptyMessage(total, hasInvalidRange) {
+  if (hasInvalidRange) return "Choose a From date on or before the To date.";
+  return total ? "No daily logs match the current filters." : "No daily logs saved yet.";
+}
+
+function getWorkoutEmptyMessage(total, hasInvalidRange) {
+  if (hasInvalidRange) return "Choose a From date on or before the To date.";
+  return total ? "No workout logs match the current filters." : "No workout logs saved yet.";
+}
+
+function updateHistoryPagination({ dailyTotal, workoutTotal, dailyShown, workoutShown, hasInvalidRange }) {
+  dom.dailyHistorySummary.textContent = buildHistorySummary("daily log", dailyShown, dailyTotal, hasInvalidRange);
+  dom.workoutHistorySummary.textContent = buildHistorySummary("workout", workoutShown, workoutTotal, hasInvalidRange);
+  dom.dailyHistoryLoadMore.hidden = dailyShown >= dailyTotal;
+  dom.workoutHistoryLoadMore.hidden = workoutShown >= workoutTotal;
+
+  if (hasInvalidRange) {
+    dom.historyFilterStatus.textContent = "Choose a From date on or before the To date.";
+    return;
+  }
+
+  const filtersApplied = Boolean(historyFilters.from || historyFilters.to || historyFilters.query);
+  const totals = `${dailyTotal} daily ${pluralize("log", dailyTotal)} and ${workoutTotal} ${pluralize("workout", workoutTotal)}`;
+  dom.historyFilterStatus.textContent = filtersApplied
+    ? `Filters match ${totals}.`
+    : `Showing all ${totals}.`;
+}
+
+function buildHistorySummary(label, shown, total, hasInvalidRange) {
+  if (hasInvalidRange) return "Adjust the date range to view history.";
+  if (total === 0) return `No matching ${pluralize(label, total)}.`;
+  return shown < total
+    ? `Showing ${shown} of ${total} ${pluralize(label, total)}.`
+    : `Showing ${total} ${pluralize(label, total)}.`;
+}
+
+function pluralize(label, count) {
+  return count === 1 ? label : `${label}s`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

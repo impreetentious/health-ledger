@@ -20,6 +20,7 @@ import {
   onAuthStateChanged,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -99,6 +100,12 @@ export async function signUpWithEmail(email, password) {
   assertFirebaseConfigured();
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   return userCredential.user;
+}
+
+/** Sends Firebase's password-reset email for a supplied account address. */
+export async function sendPasswordResetLink(email) {
+  assertFirebaseConfigured();
+  await sendPasswordResetEmail(auth, email);
 }
 
 /** Signs the current user out. */
