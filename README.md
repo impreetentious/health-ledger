@@ -102,8 +102,11 @@ health-ledger/
 │   ├── state.js
 │   ├── ui.js
 │   └── utils.js
+├── test/
+│   └── utils.test.js
 ├── favicon.svg
 ├── manifest.webmanifest
+├── package.json
 ├── service-worker.js
 ├── index.html
 └── README.md
@@ -127,6 +130,7 @@ health-ledger/
 - JSON backup export and import both work
 - Charts render without module import errors
 - If explicitly enabled on a trusted device, a reload can hydrate the Firestore cache offline
+- `npm test` passes without installing dependencies
 - Profile, preferences, and logout flows still open and close correctly
 
 ## Notes For Future Work
@@ -144,5 +148,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.3.3
-* **Version:** `v2.3.3_2024-11-22_00:37:40` (IST)
+* **Base Format Version:** 2.3.4
+* **Version:** `v2.3.4_2024-11-24_00:28:49` (IST)
