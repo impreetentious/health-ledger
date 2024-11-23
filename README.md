@@ -85,6 +85,9 @@ explicit preview workspace.
 health-ledger/
 ├── css/
 │   └── style.css
+├── fonts/
+│   ├── InterVariable.woff2
+│   └── OFL.txt
 ├── js/
 │   ├── app.js
 │   ├── auth.js
@@ -148,5 +151,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.3.4
-* **Version:** `v2.3.4_2024-11-24_00:28:49` (IST)
+* **Base Format Version:** 2.3.5
+* **Version:** `v2.3.5_2024-11-24_00:43:34` (IST)

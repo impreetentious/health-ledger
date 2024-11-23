@@ -7,13 +7,14 @@
   workspace remains the only persisted personal data in this static build.
 */
 
-const SHELL_CACHE = "health-ledger-shell-v3";
+const SHELL_CACHE = "health-ledger-shell-v4";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./favicon.svg",
   "./manifest.webmanifest",
   "./css/style.css",
+  "./fonts/InterVariable.woff2",
   "./js/runtime-config.js",
   "./js/app.js",
   "./js/auth.js",
