@@ -151,5 +151,5 @@ This IST timestamp rule is permanent for all future workflows, commits, and AI a
 
 Follow this format for version control:
 
-* **Base Format Version:** 2.3.5
-* **Version:** `v2.3.5_2024-11-24_00:43:34` (IST)
+* **Base Format Version:** 2.3.6
+* **Version:** `v2.3.6_2024-12-03_23:25:04` (IST)

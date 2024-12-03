@@ -1,7 +1,17 @@
 {
   "name": "health-ledger",
+  "version": "2.3.6",
+  "description": "A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode.",
   "private": true,
   "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ItsMonarch04/health-ledger.git"
+  },
   "scripts": {
     "test": "node --test"
   }
