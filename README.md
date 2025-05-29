@@ -90,10 +90,17 @@ explicit preview workspace.
 
 ## Verify
 
-Unit tests run on Node's built-in test runner, with no dependencies to install:
+Unit tests run on Node's built-in test runner, so they need nothing installed:
 
 ```bash
 npm test
+```
+
+Formatting is checked by Prettier, the repository's only devDependency:
+
+```bash
+npm ci
+npm run format:check
 ```
 
 Manual smoke test after a change:
@@ -178,4 +185,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.5.0
+**Version:** v2.5.1

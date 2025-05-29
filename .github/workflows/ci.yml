@@ -18,6 +18,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      # No third-party dependencies — the suite runs on the built-in node:test
-      # runner. `npm test` == `node --test` (discovers test/**/*.test.js).
+          cache: npm
+      # The app and its suite pull in no runtime dependencies — `npm test` ==
+      # `node --test` (discovers test/**/*.test.js) on the built-in runner.
+      # Prettier is the only devDependency.
+      - run: npm ci
+      - run: npm run format:check
       - run: npm test
