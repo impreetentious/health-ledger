@@ -17,7 +17,12 @@
 */
 
 import { dom, cacheDomReferences } from "./dom.js";
-import { appState, getExistingDailyLog, clearUserDataState, clearPendingGoogleLink } from "./state.js";
+import {
+  appState,
+  getExistingDailyLog,
+  clearUserDataState,
+  clearPendingGoogleLink,
+} from "./state.js";
 
 import {
   watchAuthState,
@@ -145,7 +150,7 @@ function initializeInterface() {
   if (!isFirebaseConfigured()) {
     setAuthFeedback(
       "Cloud sign-in is not configured in this public copy yet. Add your Firebase web app values in js/config.js, or use offline preview for local testing.",
-      "error"
+      "error",
     );
   }
 
@@ -215,8 +220,12 @@ function bindEvents() {
   dom.accountModalCancel.addEventListener("click", () => closeUtilityModal(dom.accountModal));
   dom.accountDeleteButton.addEventListener("click", handleAccountDelete);
 
-  dom.preferencesModalClose.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
-  dom.preferencesModalCancel.addEventListener("click", () => closeUtilityModal(dom.preferencesModal));
+  dom.preferencesModalClose.addEventListener("click", () =>
+    closeUtilityModal(dom.preferencesModal),
+  );
+  dom.preferencesModalCancel.addEventListener("click", () =>
+    closeUtilityModal(dom.preferencesModal),
+  );
 
   dom.logoutCancelButton.addEventListener("click", () => closeUtilityModal(dom.logoutModal));
   dom.logoutConfirmButton.addEventListener("click", handleLogoutConfirm);
@@ -259,7 +268,7 @@ async function handleAuthStateChange(user) {
     } else {
       setAuthFeedback(
         "Cloud sign-in is not configured in this public copy yet. Add your Firebase web app values in js/config.js, or use offline preview for local testing.",
-        "error"
+        "error",
       );
     }
     dom.authForm.reset();
@@ -282,7 +291,7 @@ async function handleAuthStateChange(user) {
   setLoadingState(
     true,
     `Loading ${getFriendlyUserName(user)}'s dashboard...`,
-    `Welcome, ${getFriendlyUserName(user)}`
+    `Welcome, ${getFriendlyUserName(user)}`,
   );
   setDashboardHydrationState(true);
 
@@ -314,7 +323,7 @@ async function handleAuthStateChange(user) {
     setAuthFeedback("We couldn't load your data right now. Please try signing in again.", "error");
     showStatusMessage(
       "Unable to load your Firestore data. Check Firebase Auth, Firestore, and security rules.",
-      true
+      true,
     );
   } finally {
     setDashboardHydrationState(false);
@@ -332,7 +341,7 @@ async function handleGoogleSignIn() {
   if (shouldOfferOfflinePreview()) {
     setAuthFeedback(
       "This local preview cannot reliably complete Firebase sign-in. Use a local server or continue in offline preview mode.",
-      "error"
+      "error",
     );
     return;
   }
@@ -370,14 +379,14 @@ async function handleGoogleSignIn() {
         if (methods.includes("password")) {
           setAuthFeedback(
             "This email already uses a password login. Sign in below once to link Google to the same Health Ledger account.",
-            "error"
+            "error",
           );
           return;
         }
 
         setAuthFeedback(
           "This email already exists with another sign-in method. Use that method first, then Google can be linked to the same profile.",
-          "error"
+          "error",
         );
         return;
       }
@@ -402,7 +411,7 @@ async function submitEmailAuth(mode) {
   if (shouldOfferOfflinePreview()) {
     setAuthFeedback(
       "Email sign-in needs a served web app. Use a local server or continue in offline preview mode here.",
-      "error"
+      "error",
     );
     return;
   }
@@ -453,7 +462,7 @@ async function handlePasswordReset() {
   if (shouldOfferOfflinePreview() || !isFirebaseConfigured()) {
     setAuthFeedback(
       "Password reset needs a configured Firebase app on a served HTTPS or localhost origin.",
-      "error"
+      "error",
     );
     return;
   }
@@ -475,7 +484,10 @@ async function handlePasswordReset() {
   setButtonLoading(dom.passwordResetButton, true);
   try {
     await sendPasswordResetLink(email);
-    setAuthFeedback("If an account exists for that address, Firebase has sent a password-reset link.", "success");
+    setAuthFeedback(
+      "If an account exists for that address, Firebase has sent a password-reset link.",
+      "success",
+    );
   } catch (error) {
     console.error(error);
     setAuthFeedback(formatFirebaseError(error), "error");
@@ -491,7 +503,7 @@ function togglePasswordVisibility() {
   dom.passwordVisibilityButton.setAttribute("aria-pressed", String(isHidden));
   dom.passwordVisibilityButton.setAttribute(
     "aria-label",
-    isHidden ? "Hide password" : "Show password"
+    isHidden ? "Hide password" : "Show password",
   );
   dom.authPassword.focus();
 }
@@ -530,7 +542,7 @@ async function sendWelcomeEmailBestEffort(user) {
     console.error(error);
     showStatusMessage(
       "Your account is ready, but the welcome email could not be sent. Check EmailJS setup in js/config.js.",
-      true
+      true,
     );
   }
 }
@@ -592,7 +604,7 @@ async function handleDailyLogSubmit(event) {
     protein,
     carbPercent,
     fatPercent,
-    macroMode
+    macroMode,
   );
   if (macroPayload.error) {
     showStatusMessage(macroPayload.error, true);
@@ -676,7 +688,7 @@ async function handleQuickWaterAdd() {
     renderStorageStatus();
     renderDashboard();
     showStatusMessage(
-      `Added 1 glass of water. Today is now ${formatMaybeNumber(savedLog.water.glasses)} / ${formatMaybeNumber(targetGlasses)} glasses.`
+      `Added 1 glass of water. Today is now ${formatMaybeNumber(savedLog.water.glasses)} / ${formatMaybeNumber(targetGlasses)} glasses.`,
     );
   } catch (error) {
     console.error(error);
@@ -727,7 +739,7 @@ async function handleWorkoutLogSubmit(event) {
     showStatusMessage(
       workoutLog.id
         ? `Updated workout log for ${savedWorkout.date}.`
-        : `Saved workout log for ${savedWorkout.date}.`
+        : `Saved workout log for ${savedWorkout.date}.`,
     );
     resetWorkoutForm();
     refreshCurrentView(getActiveViewName());
@@ -882,7 +894,8 @@ async function handleAccountDelete() {
   const confirmed = await requestConfirmation({
     eyebrow: "Delete account",
     title: "Delete your Health Ledger account?",
-    message: "This permanently removes your profile, daily logs, workouts, and saved targets. This cannot be undone.",
+    message:
+      "This permanently removes your profile, daily logs, workouts, and saved targets. This cannot be undone.",
     confirmLabel: "Delete account",
     danger: true,
   });
@@ -894,7 +907,7 @@ async function handleAccountDelete() {
   setLoadingState(
     true,
     "Permanently wiping your cloud data and finalizing profile changes...",
-    "Deleting your account"
+    "Deleting your account",
   );
 
   try {
@@ -924,7 +937,7 @@ async function handleAccountDelete() {
         console.error(emailError);
         showStatusMessage(
           "Account deletion will continue, but the goodbye email could not be sent. Check EmailJS setup in js/config.js.",
-          true
+          true,
         );
       }
     }
@@ -937,7 +950,9 @@ async function handleAccountDelete() {
     renderSignedOutState();
     setSessionState(null);
     setAppLocked(true);
-    setAuthFeedback("Your Health Ledger account was deleted. You can sign in again with another account.");
+    setAuthFeedback(
+      "Your Health Ledger account was deleted. You can sign in again with another account.",
+    );
     showStatusMessage("Your Health Ledger account and stored data have been deleted.");
   } catch (error) {
     console.error(error);
@@ -978,7 +993,9 @@ async function handleCsvImport(event) {
     const duplicateNote = result.duplicateRows
       ? ` Consolidated ${result.duplicateRows} duplicate date row(s) in source order.`
       : "";
-    showStatusMessage(`Imported ${result.dailyImported} daily log(s) from ${file.name}.${duplicateNote}`);
+    showStatusMessage(
+      `Imported ${result.dailyImported} daily log(s) from ${file.name}.${duplicateNote}`,
+    );
   } catch (error) {
     console.error(error);
     showStatusMessage(describeImportFailure(error, "Unable to import that CSV file."), true);
@@ -1004,7 +1021,8 @@ async function handleBackupImport(event) {
   const confirmed = await requestConfirmation({
     eyebrow: "Restore backup",
     title: "Import this backup into this workspace?",
-    message: "Daily logs will merge by date, duplicate workouts will be skipped, and saved targets will be restored.",
+    message:
+      "Daily logs will merge by date, duplicate workouts will be skipped, and saved targets will be restored.",
     confirmLabel: "Import backup",
   });
 
@@ -1023,7 +1041,7 @@ async function handleBackupImport(event) {
     renderStorageStatus();
     refreshCurrentView(getActiveViewName());
     showStatusMessage(
-      `Backup import complete. Added ${result.dailyImported} daily log(s), ${result.workoutImported} workout(s), and skipped ${result.workoutSkipped} duplicate workout(s).`
+      `Backup import complete. Added ${result.dailyImported} daily log(s), ${result.workoutImported} workout(s), and skipped ${result.workoutSkipped} duplicate workout(s).`,
     );
   } catch (error) {
     console.error(error);
@@ -1090,7 +1108,10 @@ async function handleHistoryAction(button) {
   if (action === "edit-workout" && workoutId) {
     const workout = appState.workoutLogs.find((log) => log.id === workoutId);
     if (!workout) {
-      showStatusMessage("That workout is no longer in the current workspace. Reload history and try again.", true);
+      showStatusMessage(
+        "That workout is no longer in the current workspace. Reload history and try again.",
+        true,
+      );
       return;
     }
     refreshCurrentView("entry");
@@ -1117,9 +1138,7 @@ async function handleHistoryAction(button) {
 
   setButtonLoading(button, true);
   try {
-    const deleted = isDailyDelete
-      ? await deleteDailyLog(date)
-      : await deleteWorkoutLog(workoutId);
+    const deleted = isDailyDelete ? await deleteDailyLog(date) : await deleteWorkoutLog(workoutId);
     if (!deleted) {
       showStatusMessage("That entry was already removed.");
       return;
@@ -1139,7 +1158,9 @@ async function handleHistoryAction(button) {
     renderHistoryTables();
     renderStorageStatus();
     refreshCurrentView(getActiveViewName());
-    showStatusMessage(isDailyDelete ? `Deleted the daily log for ${date}.` : "Deleted the workout log.");
+    showStatusMessage(
+      isDailyDelete ? `Deleted the daily log for ${date}.` : "Deleted the workout log.",
+    );
   } catch (error) {
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
@@ -1213,7 +1234,7 @@ async function linkPendingGoogleCredential(user) {
     clearPendingGoogleLink();
     setAuthFeedback(
       "Google has been linked to this account. You can now use either sign-in method.",
-      "success"
+      "success",
     );
   } catch (error) {
     if (
@@ -1223,7 +1244,7 @@ async function linkPendingGoogleCredential(user) {
       clearPendingGoogleLink();
       setAuthFeedback(
         "Google is already linked to this account. You can use either sign-in method.",
-        "success"
+        "success",
       );
       return;
     }
@@ -1255,7 +1276,7 @@ function renderSignedOutState() {
   clearDashboardPanels(
     shouldOfferOfflinePreview()
       ? "Use a local server for Firebase sign-in, or continue with offline preview mode."
-      : "Sign in to view your private dashboard and Firestore-backed trends."
+      : "Sign in to view your private dashboard and Firestore-backed trends.",
   );
   renderHistoryTables();
   renderStorageStatus();
@@ -1308,10 +1329,7 @@ function describeImportFailure(error, fallbackMessage) {
   }
 
   const { dailyImported = 0, workoutImported = 0, workoutSkipped = 0 } = error.importProgress;
-  const savedParts = [
-    `${dailyImported} daily log(s)`,
-    `${workoutImported} workout(s)`,
-  ];
+  const savedParts = [`${dailyImported} daily log(s)`, `${workoutImported} workout(s)`];
   if (workoutSkipped) savedParts.push(`${workoutSkipped} duplicate workout(s) skipped`);
   return `${error.message} Saved before the failure: ${savedParts.join(", ")}.`;
 }

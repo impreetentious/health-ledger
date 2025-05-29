@@ -80,10 +80,8 @@ export function renderHistoryTables() {
   const workoutLogs = [...appState.workoutLogs].sort(sortByDateDesc);
 
   if (!appState.currentUser) {
-    dom.dailyHistoryBody.innerHTML =
-      `<tr><td colspan="11" class="empty-state">Sign in to load daily history.</td></tr>`;
-    dom.workoutHistoryBody.innerHTML =
-      `<tr><td colspan="6" class="empty-state">Sign in to load workout history.</td></tr>`;
+    dom.dailyHistoryBody.innerHTML = `<tr><td colspan="11" class="empty-state">Sign in to load daily history.</td></tr>`;
+    dom.workoutHistoryBody.innerHTML = `<tr><td colspan="6" class="empty-state">Sign in to load workout history.</td></tr>`;
     dom.dailyHistorySummary.textContent = "Sign in to load daily history.";
     dom.workoutHistorySummary.textContent = "Sign in to load workout history.";
     dom.historyFilterStatus.textContent = "Sign in to filter your private history.";
@@ -92,9 +90,13 @@ export function renderHistoryTables() {
     return;
   }
 
-  const hasInvalidRange = Boolean(historyFilters.from && historyFilters.to && historyFilters.from > historyFilters.to);
+  const hasInvalidRange = Boolean(
+    historyFilters.from && historyFilters.to && historyFilters.from > historyFilters.to,
+  );
   const filteredDailyLogs = hasInvalidRange ? [] : dailyLogs.filter(matchesDailyHistoryFilters);
-  const filteredWorkoutLogs = hasInvalidRange ? [] : workoutLogs.filter(matchesWorkoutHistoryFilters);
+  const filteredWorkoutLogs = hasInvalidRange
+    ? []
+    : workoutLogs.filter(matchesWorkoutHistoryFilters);
   const visibleDailyLogs = filteredDailyLogs.slice(0, historyFilters.dailyVisible);
   const visibleWorkoutLogs = filteredWorkoutLogs.slice(0, historyFilters.workoutVisible);
 
@@ -120,7 +122,7 @@ export function renderHistoryTables() {
                 </div>
               </td>
             </tr>
-          `
+          `,
         )
         .join("")
     : `<tr><td colspan="11" class="empty-state">${getDailyEmptyMessage(dailyLogs.length, hasInvalidRange)}</td></tr>`;
@@ -160,7 +162,9 @@ export function renderHistoryTables() {
 function matchesDailyHistoryFilters(log) {
   if (!matchesDateRange(log.date)) return false;
   if (!historyFilters.query) return true;
-  return String(log.notes || "").toLocaleLowerCase().includes(historyFilters.query);
+  return String(log.notes || "")
+    .toLocaleLowerCase()
+    .includes(historyFilters.query);
 }
 
 function matchesWorkoutHistoryFilters(log) {
@@ -193,9 +197,25 @@ function getWorkoutEmptyMessage(total, hasInvalidRange) {
   return total ? "No workout logs match the current filters." : "No workout logs saved yet.";
 }
 
-function updateHistoryPagination({ dailyTotal, workoutTotal, dailyShown, workoutShown, hasInvalidRange }) {
-  dom.dailyHistorySummary.textContent = buildHistorySummary("daily log", dailyShown, dailyTotal, hasInvalidRange);
-  dom.workoutHistorySummary.textContent = buildHistorySummary("workout", workoutShown, workoutTotal, hasInvalidRange);
+function updateHistoryPagination({
+  dailyTotal,
+  workoutTotal,
+  dailyShown,
+  workoutShown,
+  hasInvalidRange,
+}) {
+  dom.dailyHistorySummary.textContent = buildHistorySummary(
+    "daily log",
+    dailyShown,
+    dailyTotal,
+    hasInvalidRange,
+  );
+  dom.workoutHistorySummary.textContent = buildHistorySummary(
+    "workout",
+    workoutShown,
+    workoutTotal,
+    hasInvalidRange,
+  );
   dom.dailyHistoryLoadMore.hidden = dailyShown >= dailyTotal;
   dom.workoutHistoryLoadMore.hidden = workoutShown >= workoutTotal;
 

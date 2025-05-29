@@ -28,13 +28,13 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const chartInstances = {
-  weight:   null,
+  weight: null,
   calories: null,
-  protein:  null,
-  steps:    null,
-  water:    null,
-  macros:   null,
-  volume:   null,
+  protein: null,
+  steps: null,
+  water: null,
+  macros: null,
+  volume: null,
 };
 
 function getChartConstructor() {
@@ -47,7 +47,7 @@ function getChartConstructor() {
 
 function buildSharedChartOptions(yAxisLabel) {
   return {
-    responsive:          true,
+    responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
     plugins: {
@@ -56,11 +56,11 @@ function buildSharedChartOptions(yAxisLabel) {
     scales: {
       x: {
         ticks: { color: "#98acbc" },
-        grid:  { color: "rgba(255, 255, 255, 0.04)" },
+        grid: { color: "rgba(255, 255, 255, 0.04)" },
       },
       y: {
         ticks: { color: "#98acbc" },
-        grid:  { color: "rgba(255, 255, 255, 0.04)" },
+        grid: { color: "rgba(255, 255, 255, 0.04)" },
         title: { display: true, text: yAxisLabel, color: "#98acbc" },
       },
     },
@@ -90,15 +90,15 @@ export function destroyAllCharts() {
  * calculated from the full log history (not just the visible week).
  */
 export function renderWeightChart(allDailyLogs, selectedWeek) {
-  const Chart     = getChartConstructor();
+  const Chart = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
-  const logMap    = buildDailyLogMap(allDailyLogs);
-  const weights   = weekDates.map((date) => logMap[date]?.weight ?? null);
+  const logMap = buildDailyLogMap(allDailyLogs);
+  const weights = weekDates.map((date) => logMap[date]?.weight ?? null);
 
   const rollingAverage = weekDates.map((date, index) => {
     if (!isNumber(weights[index])) return null;
-    const windowStart      = shiftDateString(date, -6);
-    const weightsInWindow  = allDailyLogs
+    const windowStart = shiftDateString(date, -6);
+    const weightsInWindow = allDailyLogs
       .filter((log) => log.date >= windowStart && log.date <= date && isNumber(log.weight))
       .map((log) => log.weight);
     return calculateAverage(weightsInWindow);
@@ -107,26 +107,26 @@ export function renderWeightChart(allDailyLogs, selectedWeek) {
   chartInstances.weight = new Chart(dom.weightChart, {
     type: "line",
     data: {
-      labels:   weekDates.map(formatShortDateLabel),
+      labels: weekDates.map(formatShortDateLabel),
       datasets: [
         {
-          label:           "Weight",
-          data:            weights,
-          borderColor:     "#68e4ff",
+          label: "Weight",
+          data: weights,
+          borderColor: "#68e4ff",
           backgroundColor: "rgba(104, 228, 255, 0.16)",
-          tension:         0.35,
-          fill:            false,
-          spanGaps:        true,
+          tension: 0.35,
+          fill: false,
+          spanGaps: true,
         },
         {
-          label:           "7-Day Rolling Avg",
-          data:            rollingAverage,
-          borderColor:     "#f5fbff",
+          label: "7-Day Rolling Avg",
+          data: rollingAverage,
+          borderColor: "#f5fbff",
           backgroundColor: "rgba(245, 251, 255, 0.12)",
-          tension:         0.35,
-          borderDash:      [8, 5],
-          fill:            false,
-          spanGaps:        true,
+          tension: 0.35,
+          borderDash: [8, 5],
+          fill: false,
+          spanGaps: true,
         },
       ],
     },
@@ -136,30 +136,30 @@ export function renderWeightChart(allDailyLogs, selectedWeek) {
 
 /** Daily calorie bars against a flat target line. */
 export function renderCalorieChart(dailyLogsThisWeek, selectedWeek, calorieTarget) {
-  const Chart     = getChartConstructor();
+  const Chart = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
-  const logMap    = buildDailyLogMap(dailyLogsThisWeek);
+  const logMap = buildDailyLogMap(dailyLogsThisWeek);
 
   chartInstances.calories = new Chart(dom.calorieChart, {
     type: "bar",
     data: {
-      labels:   weekDates.map(formatShortDateLabel),
+      labels: weekDates.map(formatShortDateLabel),
       datasets: [
         {
-          type:            "bar",
-          label:           "Calories",
-          data:            weekDates.map((date) => logMap[date]?.calories ?? null),
+          type: "bar",
+          label: "Calories",
+          data: weekDates.map((date) => logMap[date]?.calories ?? null),
           backgroundColor: "rgba(104, 228, 255, 0.72)",
-          borderRadius:    10,
+          borderRadius: 10,
         },
         {
-          type:        "line",
-          label:       "Target",
-          data:        weekDates.map(() => calorieTarget),
+          type: "line",
+          label: "Target",
+          data: weekDates.map(() => calorieTarget),
           borderColor: "#f5fbff",
           borderWidth: 2,
           pointRadius: 0,
-          tension:     0,
+          tension: 0,
         },
       ],
     },
@@ -169,30 +169,30 @@ export function renderCalorieChart(dailyLogsThisWeek, selectedWeek, calorieTarge
 
 /** Daily protein bars against a flat gram target line. */
 export function renderProteinChart(dailyLogsThisWeek, selectedWeek, proteinTarget) {
-  const Chart     = getChartConstructor();
+  const Chart = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
-  const logMap    = buildDailyLogMap(dailyLogsThisWeek);
+  const logMap = buildDailyLogMap(dailyLogsThisWeek);
 
   chartInstances.protein = new Chart(dom.proteinChart, {
     type: "bar",
     data: {
-      labels:   weekDates.map(formatShortDateLabel),
+      labels: weekDates.map(formatShortDateLabel),
       datasets: [
         {
-          type:            "bar",
-          label:           "Protein",
-          data:            weekDates.map((date) => logMap[date]?.macros.protein ?? null),
+          type: "bar",
+          label: "Protein",
+          data: weekDates.map((date) => logMap[date]?.macros.protein ?? null),
           backgroundColor: "rgba(214, 247, 255, 0.78)",
-          borderRadius:    10,
+          borderRadius: 10,
         },
         {
-          type:        "line",
-          label:       "Target",
-          data:        weekDates.map(() => proteinTarget),
+          type: "line",
+          label: "Target",
+          data: weekDates.map(() => proteinTarget),
           borderColor: "#68e4ff",
           borderWidth: 2,
           pointRadius: 0,
-          tension:     0,
+          tension: 0,
         },
       ],
     },
@@ -202,32 +202,32 @@ export function renderProteinChart(dailyLogsThisWeek, selectedWeek, proteinTarge
 
 /** Daily step bars with a weekly average reference line. */
 export function renderStepsChart(dailyLogsThisWeek, selectedWeek) {
-  const Chart        = getChartConstructor();
-  const weekDates    = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
-  const logMap       = buildDailyLogMap(dailyLogsThisWeek);
-  const stepValues   = weekDates.map((date) => logMap[date]?.steps ?? null);
+  const Chart = getChartConstructor();
+  const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
+  const logMap = buildDailyLogMap(dailyLogsThisWeek);
+  const stepValues = weekDates.map((date) => logMap[date]?.steps ?? null);
   const averageSteps = calculateAverage(stepValues.filter(isNumber));
 
   chartInstances.steps = new Chart(dom.stepsChart, {
     type: "bar",
     data: {
-      labels:   weekDates.map(formatShortDateLabel),
+      labels: weekDates.map(formatShortDateLabel),
       datasets: [
         {
-          type:            "bar",
-          label:           "Steps",
-          data:            stepValues,
+          type: "bar",
+          label: "Steps",
+          data: stepValues,
           backgroundColor: "rgba(141, 160, 179, 0.72)",
-          borderRadius:    10,
+          borderRadius: 10,
         },
         {
-          type:        "line",
-          label:       "Weekly Avg",
-          data:        weekDates.map(() => averageSteps),
+          type: "line",
+          label: "Weekly Avg",
+          data: weekDates.map(() => averageSteps),
           borderColor: "#f5fbff",
           borderWidth: 2,
           pointRadius: 0,
-          tension:     0,
+          tension: 0,
         },
       ],
     },
@@ -237,34 +237,34 @@ export function renderStepsChart(dailyLogsThisWeek, selectedWeek) {
 
 /** Daily water-intake bars (in litres) against a per-day target line. */
 export function renderWaterChart(dailyLogsThisWeek, selectedWeek, settings) {
-  const Chart     = getChartConstructor();
+  const Chart = getChartConstructor();
   const weekDates = getDateStringsInRange(selectedWeek.start, selectedWeek.end);
-  const logMap    = buildDailyLogMap(dailyLogsThisWeek);
+  const logMap = buildDailyLogMap(dailyLogsThisWeek);
 
   chartInstances.water = new Chart(dom.waterChart, {
     type: "bar",
     data: {
-      labels:   weekDates.map(formatShortDateLabel),
+      labels: weekDates.map(formatShortDateLabel),
       datasets: [
         {
-          type:            "bar",
-          label:           "Water Intake",
-          data:            weekDates.map((date) =>
-            getWaterLitersFromLog(logMap[date] || createEmptyDailyLog(date), settings)
+          type: "bar",
+          label: "Water Intake",
+          data: weekDates.map((date) =>
+            getWaterLitersFromLog(logMap[date] || createEmptyDailyLog(date), settings),
           ),
           backgroundColor: "rgba(104, 228, 255, 0.5)",
-          borderRadius:    10,
+          borderRadius: 10,
         },
         {
-          type:        "line",
-          label:       "Target",
-          data:        weekDates.map((date) =>
-            getWaterTargetLiters(logMap[date] || createEmptyDailyLog(date), settings)
+          type: "line",
+          label: "Target",
+          data: weekDates.map((date) =>
+            getWaterTargetLiters(logMap[date] || createEmptyDailyLog(date), settings),
           ),
           borderColor: "#f5fbff",
           borderWidth: 2,
           pointRadius: 0,
-          tension:     0,
+          tension: 0,
         },
       ],
     },
@@ -277,41 +277,42 @@ export function renderWaterChart(dailyLogsThisWeek, selectedWeek, settings) {
  * against the user's saved target (outer ring).
  */
 export function renderMacroChart(logsThisWeek, macroTarget) {
-  const Chart  = getChartConstructor();
+  const Chart = getChartConstructor();
   const totals = logsThisWeek.reduce(
     (acc, log) => {
-      const breakdown  = getMacroCaloriesBreakdown(log);
-      acc.protein     += breakdown.protein;
-      acc.carbs       += breakdown.carbs;
-      acc.fat         += breakdown.fat;
+      const breakdown = getMacroCaloriesBreakdown(log);
+      acc.protein += breakdown.protein;
+      acc.carbs += breakdown.carbs;
+      acc.fat += breakdown.fat;
       return acc;
     },
     { protein: 0, carbs: 0, fat: 0 },
   );
 
   const totalMacroCalories = totals.protein + totals.carbs + totals.fat;
-  const actualSplit = totalMacroCalories > 0
-    ? [
-        roundToOneDecimal((totals.protein / totalMacroCalories) * 100),
-        roundToOneDecimal((totals.carbs   / totalMacroCalories) * 100),
-        roundToOneDecimal((totals.fat     / totalMacroCalories) * 100),
-      ]
-    : [0, 0, 0];
+  const actualSplit =
+    totalMacroCalories > 0
+      ? [
+          roundToOneDecimal((totals.protein / totalMacroCalories) * 100),
+          roundToOneDecimal((totals.carbs / totalMacroCalories) * 100),
+          roundToOneDecimal((totals.fat / totalMacroCalories) * 100),
+        ]
+      : [0, 0, 0];
 
   chartInstances.macros = new Chart(dom.macroChart, {
     type: "doughnut",
     data: {
-      labels:   ["Protein", "Carbs", "Fat"],
+      labels: ["Protein", "Carbs", "Fat"],
       datasets: [
         {
-          label:           "Actual Weekly Avg %",
-          data:            actualSplit,
+          label: "Actual Weekly Avg %",
+          data: actualSplit,
           backgroundColor: ["#68e4ff", "#f5fbff", "#8da0b3"],
-          borderWidth:     0,
+          borderWidth: 0,
         },
         {
-          label:           "Target %",
-          data:            [macroTarget.protein, macroTarget.carbs, macroTarget.fat],
+          label: "Target %",
+          data: [macroTarget.protein, macroTarget.carbs, macroTarget.fat],
           backgroundColor: [
             "rgba(104, 228, 255, 0.22)",
             "rgba(245, 251, 255, 0.18)",
@@ -322,9 +323,9 @@ export function renderMacroChart(logsThisWeek, macroTarget) {
       ],
     },
     options: {
-      responsive:          true,
+      responsive: true,
       maintainAspectRatio: false,
-      cutout:              "52%",
+      cutout: "52%",
       plugins: {
         legend: { labels: { color: "#f5fbff" } },
         tooltip: {
@@ -339,7 +340,7 @@ export function renderMacroChart(logsThisWeek, macroTarget) {
 
 /** Horizontal bar chart of total weekly sets grouped by muscle group. */
 export function renderVolumeChart(workoutsThisWeek) {
-  const Chart               = getChartConstructor();
+  const Chart = getChartConstructor();
   const volumeByMuscleGroup = {};
 
   workoutsThisWeek.forEach((workout) => {
@@ -355,13 +356,13 @@ export function renderVolumeChart(workoutsThisWeek) {
   chartInstances.volume = new Chart(dom.volumeChart, {
     type: "bar",
     data: {
-      labels:   labels.length ? labels : ["No workouts"],
+      labels: labels.length ? labels : ["No workouts"],
       datasets: [
         {
-          label:           "Total Sets",
-          data:            values.length ? values : [0],
+          label: "Total Sets",
+          data: values.length ? values : [0],
           backgroundColor: ["#68e4ff", "#d6f7ff", "#8da0b3", "#9ee9ff", "#c6fbff", "#eafcff"],
-          borderRadius:    12,
+          borderRadius: 12,
         },
       ],
     },

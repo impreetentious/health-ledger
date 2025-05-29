@@ -45,22 +45,22 @@ export function populateDailyFormForDate(date) {
   dom.dailyForm.elements.weight.value = valueOrEmpty(log.weight);
   dom.dailyForm.elements.calories.value = valueOrEmpty(log.calories);
   dom.dailyForm.elements.protein.value = valueOrEmpty(
-    log.macroPercentages.protein ?? derivedPercentages.protein
+    log.macroPercentages.protein ?? derivedPercentages.protein,
   );
   dom.dailyForm.elements.carbPercent.value = valueOrEmpty(
-    log.macroPercentages.carbs ?? derivedPercentages.carbs
+    log.macroPercentages.carbs ?? derivedPercentages.carbs,
   );
   dom.dailyForm.elements.fatPercent.value = valueOrEmpty(
-    log.macroPercentages.fat ?? derivedPercentages.fat
+    log.macroPercentages.fat ?? derivedPercentages.fat,
   );
   dom.dailyForm.elements.steps.value = valueOrEmpty(log.steps);
   dom.dailyForm.elements.sleep.value = valueOrEmpty(log.sleep);
   dom.dailyForm.elements.waterGlasses.value = valueOrEmpty(log.water.glasses);
   dom.dailyForm.elements.waterTargetGlasses.value = valueOrEmpty(
-    log.water.targetGlasses ?? settings.waterTargetGlasses
+    log.water.targetGlasses ?? settings.waterTargetGlasses,
   );
   dom.dailyForm.elements.waterUnitAmountMl.value = valueOrEmpty(
-    log.water.unitAmountMl ?? settings.waterUnitAmountMl
+    log.water.unitAmountMl ?? settings.waterUnitAmountMl,
   );
   dom.dailyForm.elements.energy.value = valueOrEmpty(log.energy);
   dom.dailyForm.elements.notes.value = log.notes || "";
@@ -82,7 +82,7 @@ export function updateNutritionPreview() {
     carbPercent,
     fatPercent,
     macroMode,
-    true
+    true,
   );
 
   if (payload.error) {
@@ -117,9 +117,15 @@ export function updateNutritionPreview() {
     return;
   }
 
-  const proteinText = isNumber(payload.macros.protein) ? `${payload.macros.protein.toFixed(1)} g` : "Enter calories";
-  const carbsText = isNumber(payload.macros.carbs) ? `${payload.macros.carbs.toFixed(1)} g` : "Enter calories";
-  const fatText = isNumber(payload.macros.fat) ? `${payload.macros.fat.toFixed(1)} g` : "Enter calories";
+  const proteinText = isNumber(payload.macros.protein)
+    ? `${payload.macros.protein.toFixed(1)} g`
+    : "Enter calories";
+  const carbsText = isNumber(payload.macros.carbs)
+    ? `${payload.macros.carbs.toFixed(1)} g`
+    : "Enter calories";
+  const fatText = isNumber(payload.macros.fat)
+    ? `${payload.macros.fat.toFixed(1)} g`
+    : "Enter calories";
   const assignedText = isNumber(payload.assignedPercent)
     ? `${payload.assignedPercent.toFixed(1)}%`
     : "Not available";

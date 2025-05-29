@@ -49,9 +49,7 @@ export function upsertDailyLogInState(dailyLog) {
 
 export function upsertWorkoutLogInState(workoutLog) {
   const nextLogs = [...appState.workoutLogs];
-  const existingIndex = workoutLog.id
-    ? nextLogs.findIndex((log) => log.id === workoutLog.id)
-    : -1;
+  const existingIndex = workoutLog.id ? nextLogs.findIndex((log) => log.id === workoutLog.id) : -1;
 
   if (existingIndex >= 0) {
     nextLogs[existingIndex] = workoutLog;

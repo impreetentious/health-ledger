@@ -77,17 +77,15 @@ export function renderDashboard() {
   const workoutsThisWeek = filterLogsByWindow(workoutLogs, selectedWeek);
 
   const averageWeight = calculateAverage(
-    dailyLogsThisWeek.map((log) => log.weight).filter(isNumber)
+    dailyLogsThisWeek.map((log) => log.weight).filter(isNumber),
   );
   const averageCalories = calculateAverage(
-    dailyLogsThisWeek.map((log) => log.calories).filter(isNumber)
+    dailyLogsThisWeek.map((log) => log.calories).filter(isNumber),
   );
   const averageProtein = calculateAverage(
-    dailyLogsThisWeek.map((log) => log.macros.protein).filter(isNumber)
+    dailyLogsThisWeek.map((log) => log.macros.protein).filter(isNumber),
   );
-  const averageSteps = calculateAverage(
-    dailyLogsThisWeek.map((log) => log.steps).filter(isNumber)
-  );
+  const averageSteps = calculateAverage(dailyLogsThisWeek.map((log) => log.steps).filter(isNumber));
   const totalWorkouts = workoutsThisWeek.length;
 
   dom.dashboardSummary.textContent =
@@ -110,13 +108,15 @@ export function renderDashboard() {
   const chartAvailability = {
     weight: dailyLogsThisWeek.some((log) => isNumber(log.weight)),
     macro: dailyLogsThisWeek.some((log) =>
-      [log.macros?.protein, log.macros?.carbs, log.macros?.fat].some(isNumber)
+      [log.macros?.protein, log.macros?.carbs, log.macros?.fat].some(isNumber),
     ),
     calories: dailyLogsThisWeek.some((log) => isNumber(log.calories)),
     protein: dailyLogsThisWeek.some((log) => isNumber(log.macros?.protein)),
     steps: dailyLogsThisWeek.some((log) => isNumber(log.steps)),
     water: dailyLogsThisWeek.some((log) => isNumber(log.water?.glasses)),
-    volume: workoutsThisWeek.some((log) => log.exercises?.some((exercise) => exercise.sets?.length)),
+    volume: workoutsThisWeek.some((log) =>
+      log.exercises?.some((exercise) => exercise.sets?.length),
+    ),
   };
 
   Object.entries(chartAvailability).forEach(([key, hasData]) => {
@@ -128,8 +128,10 @@ export function renderDashboard() {
   // recovery path in app.js, which would sign the user out and blame Firestore.
   try {
     if (chartAvailability.weight) renderWeightChart(dailyLogs, selectedWeek);
-    if (chartAvailability.calories) renderCalorieChart(dailyLogsThisWeek, selectedWeek, settings.calorieTarget);
-    if (chartAvailability.protein) renderProteinChart(dailyLogsThisWeek, selectedWeek, settings.proteinGramTarget);
+    if (chartAvailability.calories)
+      renderCalorieChart(dailyLogsThisWeek, selectedWeek, settings.calorieTarget);
+    if (chartAvailability.protein)
+      renderProteinChart(dailyLogsThisWeek, selectedWeek, settings.proteinGramTarget);
     if (chartAvailability.steps) renderStepsChart(dailyLogsThisWeek, selectedWeek);
     if (chartAvailability.water) renderWaterChart(dailyLogsThisWeek, selectedWeek, settings);
     if (chartAvailability.macro) renderMacroChart(dailyLogsThisWeek, settings.macroTarget);
@@ -144,7 +146,7 @@ export function renderDashboard() {
     });
     showStatusMessage(
       "Your data is loaded, but the charts could not be drawn (Chart.js failed to load). Check your connection and reload to retry.",
-      true
+      true,
     );
   }
 }
@@ -200,7 +202,7 @@ function syncWeekSelector(weekOptions) {
   dom.dashboardWeekSelect.innerHTML = weekOptions
     .map(
       (option) =>
-        `<option value="${option.key}" ${option.key === selected.key ? "selected" : ""}>${escapeHtml(option.label)}</option>`
+        `<option value="${option.key}" ${option.key === selected.key ? "selected" : ""}>${escapeHtml(option.label)}</option>`,
     )
     .join("");
 
@@ -221,18 +223,23 @@ function renderQuickWaterProgress() {
   const completion = safeTarget ? Math.min(Math.max(glasses / safeTarget, 0), 1) : 0;
   const completionPercent = Math.round(completion * 100);
 
-  dom.quickWaterProgress.textContent =
-    `${formatNumberForDisplay(glasses)} / ${formatNumberForDisplay(targetGlasses)} Glasses`;
+  dom.quickWaterProgress.textContent = `${formatNumberForDisplay(glasses)} / ${formatNumberForDisplay(targetGlasses)} Glasses`;
   dom.quickWaterMeter.style.setProperty("--water-progress", String(completion));
   dom.quickWaterMeterLabel.textContent = `${completionPercent}%`;
   dom.quickWaterMeter.setAttribute(
     "aria-label",
-    `Water progress: ${formatNumberForDisplay(glasses)} of ${formatNumberForDisplay(targetGlasses)} glasses`
+    `Water progress: ${formatNumberForDisplay(glasses)} of ${formatNumberForDisplay(targetGlasses)} glasses`,
   );
   dom.quickWaterButton.disabled = !appState.currentUser;
 }
 
-function renderInsightCards(averageWeight, averageCalories, averageProtein, averageSteps, totalWorkouts) {
+function renderInsightCards(
+  averageWeight,
+  averageCalories,
+  averageProtein,
+  averageSteps,
+  totalWorkouts,
+) {
   const cards = [
     {
       label: "Average Weight",
@@ -287,7 +294,7 @@ function renderInsightCards(averageWeight, averageCalories, averageProtein, aver
           >${escapeHtml(card.value)}</strong>
           <p>${escapeHtml(card.detail)}</p>
         </article>
-      `
+      `,
     )
     .join("");
 
@@ -306,7 +313,7 @@ function renderWeeklyInsightNarrative({
   const previousWeightAverage = calculateAverage(
     filterLogsByWindow(appState.dailyLogs, getPreviousWeekInfo(selectedWeek))
       .map((log) => log.weight)
-      .filter(isNumber)
+      .filter(isNumber),
   );
 
   if (isNumber(averageCalories)) {
@@ -315,12 +322,17 @@ function renderWeeklyInsightNarrative({
       const targetDifference = ((averageCalories - target) / target) * 100;
       const roundedDifference = Math.round(Math.abs(targetDifference));
       const direction = targetDifference > 0 ? "over" : targetDifference < 0 ? "under" : "on";
-      const targetCopy = direction === "on"
-        ? "on your saved target"
-        : `${roundedDifference}% ${direction} your saved target`;
-      sentences.push(`Average intake was ${Math.round(averageCalories).toLocaleString("en-US")} kcal, ${targetCopy}.`);
+      const targetCopy =
+        direction === "on"
+          ? "on your saved target"
+          : `${roundedDifference}% ${direction} your saved target`;
+      sentences.push(
+        `Average intake was ${Math.round(averageCalories).toLocaleString("en-US")} kcal, ${targetCopy}.`,
+      );
     } else {
-      sentences.push(`Average intake was ${Math.round(averageCalories).toLocaleString("en-US")} kcal.`);
+      sentences.push(
+        `Average intake was ${Math.round(averageCalories).toLocaleString("en-US")} kcal.`,
+      );
     }
   }
 
@@ -330,7 +342,9 @@ function renderWeeklyInsightNarrative({
       sentences.push("Average weight was essentially steady versus the previous week.");
     } else {
       const direction = change > 0 ? "up" : "down";
-      sentences.push(`Average weight was ${Math.abs(change).toFixed(1)} kg ${direction} versus the previous week.`);
+      sentences.push(
+        `Average weight was ${Math.abs(change).toFixed(1)} kg ${direction} versus the previous week.`,
+      );
     }
   } else if (isNumber(averageWeight)) {
     sentences.push(`Average weight was ${averageWeight.toFixed(1)} kg across the logged days.`);
@@ -338,15 +352,19 @@ function renderWeeklyInsightNarrative({
 
   if (workoutsThisWeek.length) {
     const totalSets = workoutsThisWeek.reduce(
-      (sum, workout) => sum + (workout.exercises || []).reduce(
-        (exerciseTotal, exercise) => exerciseTotal + (exercise.sets || []).length,
-        0
-      ),
-      0
+      (sum, workout) =>
+        sum +
+        (workout.exercises || []).reduce(
+          (exerciseTotal, exercise) => exerciseTotal + (exercise.sets || []).length,
+          0,
+        ),
+      0,
     );
     const sessionLabel = workoutsThisWeek.length === 1 ? "workout" : "workouts";
     const setLabel = totalSets === 1 ? "set" : "sets";
-    sentences.push(`You logged ${workoutsThisWeek.length} ${sessionLabel} and ${totalSets} total ${setLabel}.`);
+    sentences.push(
+      `You logged ${workoutsThisWeek.length} ${sessionLabel} and ${totalSets} total ${setLabel}.`,
+    );
   }
 
   if (!sentences.length) {
@@ -385,11 +403,10 @@ function renderConsistencyPanel(dailyLogs) {
   dom.consistencyHeatmap.replaceChildren(fragment);
   dom.consistencyHeatmap.setAttribute(
     "aria-label",
-    `${loggedDayCount} of the last 90 days have a daily log. Current streak: ${streak} ${streak === 1 ? "day" : "days"}.`
+    `${loggedDayCount} of the last 90 days have a daily log. Current streak: ${streak} ${streak === 1 ? "day" : "days"}.`,
   );
   dom.loggingStreakCount.textContent = `${streak} ${streak === 1 ? "day" : "days"}`;
-  dom.consistencyCaption.textContent =
-    `${loggedDayCount} of the last 90 days have a daily log. A streak counts consecutive days ending today.`;
+  dom.consistencyCaption.textContent = `${loggedDayCount} of the last 90 days have a daily log. A streak counts consecutive days ending today.`;
 }
 
 function getDailyLogDetailLevel(log) {
@@ -506,22 +523,22 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
   const currentCalories = calculateAverage(
     filterLogsByWindow(dailyLogs, selectedWeek)
       .map((log) => log.calories)
-      .filter(isNumber)
+      .filter(isNumber),
   );
   const currentWeightAverage = calculateAverage(
     filterLogsByWindow(dailyLogs, selectedWeek)
       .map((log) => log.weight)
-      .filter(isNumber)
+      .filter(isNumber),
   );
   const previousWeightAverage = calculateAverage(
     filterLogsByWindow(dailyLogs, previousWeek)
       .map((log) => log.weight)
-      .filter(isNumber)
+      .filter(isNumber),
   );
   const currentProtein = calculateAverage(
     filterLogsByWindow(dailyLogs, selectedWeek)
       .map((log) => log.macros.protein)
-      .filter(isNumber)
+      .filter(isNumber),
   );
 
   const weightLossPercent =
@@ -533,9 +550,10 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
   // user's own configured calorieTarget so the warning stays meaningful for
   // both cutting and bulking goals and never invents a global health rule.
   const calorieShortfallRatio = 0.8;
-  const calorieFloor = isNumber(settings.calorieTarget) && settings.calorieTarget > 0
-    ? settings.calorieTarget * calorieShortfallRatio
-    : null;
+  const calorieFloor =
+    isNumber(settings.calorieTarget) && settings.calorieTarget > 0
+      ? settings.calorieTarget * calorieShortfallRatio
+      : null;
 
   const alerts = [
     isNumber(currentCalories) && isNumber(calorieFloor) && currentCalories < calorieFloor
@@ -591,7 +609,7 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
           <strong>${escapeHtml(alert.value)}</strong>
           <p>${escapeHtml(alert.detail)}</p>
         </article>
-      `
+      `,
     )
     .join("");
 }

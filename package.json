@@ -1,6 +1,6 @@
 {
   "name": "health-ledger",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode.",
   "private": true,
   "type": "module",
@@ -13,6 +13,11 @@
     "url": "git+https://github.com/ItsMonarch04/health-ledger.git"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3"
   }
 }

@@ -29,18 +29,15 @@ const SHELL_ASSETS = [
   "./js/pwa.js",
   "./js/state.js",
   "./js/ui.js",
-  "./js/utils.js"
+  "./js/utils.js",
 ];
 
-const STATIC_RUNTIME_ORIGINS = new Set([
-  "https://www.gstatic.com",
-  "https://cdn.jsdelivr.net",
-]);
+const STATIC_RUNTIME_ORIGINS = new Set(["https://www.gstatic.com", "https://cdn.jsdelivr.net"]);
 
 // Do not use a broad same-origin rule here: a host can add endpoints later,
 // and health records or backup responses must never enter Cache Storage.
 const SHELL_PATHS = new Set(
-  SHELL_ASSETS.map((asset) => new URL(asset, self.registration.scope).pathname)
+  SHELL_ASSETS.map((asset) => new URL(asset, self.registration.scope).pathname),
 );
 
 self.addEventListener("install", (event) => {
@@ -48,7 +45,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(SHELL_CACHE)
       .then((cache) => cache.addAll(SHELL_ASSETS))
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting()),
   );
 });
 
@@ -56,8 +53,10 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key))),
+      )
+      .then(() => self.clients.claim()),
   );
 });
 

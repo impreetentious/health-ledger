@@ -43,10 +43,7 @@ import {
   getWorkoutSignature,
   sortByDateAsc,
 } from "./utils.js";
-import {
-  OFFLINE_PREVIEW_STORAGE_KEY,
-  LOCAL_WORKSPACE_SCHEMA_VERSION,
-} from "./config.js";
+import { OFFLINE_PREVIEW_STORAGE_KEY, LOCAL_WORKSPACE_SCHEMA_VERSION } from "./config.js";
 
 // Keep comfortably below Firestore's 500-operation transaction/batch limit.
 // This leaves room for a future import to add related metadata atomically.
@@ -134,12 +131,9 @@ export async function hydrateUserWorkspace(uid) {
  * CSV import, backup import) keep the default merge semantics.
  */
 export async function saveDailyLog(dailyLog, { replace = false } = {}) {
-  const user        = requireAuthenticatedUser();
+  const user = requireAuthenticatedUser();
   const existingLog = replace ? null : getExistingDailyLog(dailyLog.date);
-  const mergedLog   = mergeDailyLogs(
-    existingLog ?? createEmptyDailyLog(dailyLog.date),
-    dailyLog,
-  );
+  const mergedLog = mergeDailyLogs(existingLog ?? createEmptyDailyLog(dailyLog.date), dailyLog);
   const normalizedLog = normalizeDailyLog(mergedLog);
 
   if (appState.previewMode) {
@@ -155,11 +149,9 @@ export async function saveDailyLog(dailyLog, { replace = false } = {}) {
   }
 
   assertFirebaseConfigured();
-  await setDoc(
-    getUserDailyLogDoc(user.uid, normalizedLog.date),
-    clonePlainData(normalizedLog),
-    { merge: true },
-  );
+  await setDoc(getUserDailyLogDoc(user.uid, normalizedLog.date), clonePlainData(normalizedLog), {
+    merge: true,
+  });
 
   upsertDailyLogInState(normalizedLog);
   return normalizedLog;
@@ -178,9 +170,10 @@ export async function importDailyLogs(dailyLogs) {
   const mergedByDate = new Map();
 
   for (const incomingLog of dailyLogs) {
-    const existingLog = mergedByDate.get(incomingLog.date)
-      ?? getExistingDailyLog(incomingLog.date)
-      ?? createEmptyDailyLog(incomingLog.date);
+    const existingLog =
+      mergedByDate.get(incomingLog.date) ??
+      getExistingDailyLog(incomingLog.date) ??
+      createEmptyDailyLog(incomingLog.date);
     const normalizedLog = normalizeDailyLog(mergeDailyLogs(existingLog, incomingLog));
     mergedByDate.set(normalizedLog.date, normalizedLog);
   }
@@ -213,11 +206,7 @@ export async function importDailyLogs(dailyLogs) {
       const chunk = logs.slice(index, index + FIRESTORE_BATCH_SIZE);
       const batch = writeBatch(db);
       chunk.forEach((log) => {
-        batch.set(
-          getUserDailyLogDoc(user.uid, log.date),
-          clonePlainData(log),
-          { merge: true },
-        );
+        batch.set(getUserDailyLogDoc(user.uid, log.date), clonePlainData(log), { merge: true });
       });
       await batch.commit();
       chunk.forEach(upsertDailyLogInState);
@@ -240,7 +229,7 @@ export async function importDailyLogs(dailyLogs) {
  * object always carries it so future edits/deletes address the same session.
  */
 export async function saveWorkoutLog(workoutLog) {
-  const user          = requireAuthenticatedUser();
+  const user = requireAuthenticatedUser();
   const normalizedLog = normalizeWorkoutLog(workoutLog);
 
   if (appState.previewMode) {
@@ -321,7 +310,7 @@ export async function deleteWorkoutLog(id) {
 
 /** Persists the user's preference/target settings to Firestore. */
 export async function saveUserSettings(userSettings) {
-  const user               = requireAuthenticatedUser();
+  const user = requireAuthenticatedUser();
   const normalizedSettings = normalizeUserSettings(userSettings);
 
   if (appState.previewMode) {
@@ -337,11 +326,7 @@ export async function saveUserSettings(userSettings) {
   }
 
   assertFirebaseConfigured();
-  await setDoc(
-    getUserSettingsDoc(user.uid),
-    clonePlainData(normalizedSettings),
-    { merge: true },
-  );
+  await setDoc(getUserSettingsDoc(user.uid), clonePlainData(normalizedSettings), { merge: true });
 
   appState.userSettings = normalizedSettings;
   return normalizedSettings;
@@ -365,11 +350,11 @@ export async function ensureUserProfile(user) {
   await setDoc(
     getUserProfileDoc(user.uid),
     {
-      uid:         user.uid,
-      email:       user.email       || "",
+      uid: user.uid,
+      email: user.email || "",
       displayName: user.displayName || "",
-      photoURL:    user.photoURL    || "",
-      lastSeenAt:  new Date().toISOString(),
+      photoURL: user.photoURL || "",
+      lastSeenAt: new Date().toISOString(),
     },
     { merge: true },
   );
@@ -411,19 +396,19 @@ export async function deleteUserWorkspace(uid) {
  */
 export function readOfflinePreviewWorkspace() {
   try {
-    const raw    = localStorage.getItem(OFFLINE_PREVIEW_STORAGE_KEY);
+    const raw = localStorage.getItem(OFFLINE_PREVIEW_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
 
     if (
-      parsed
-      && typeof parsed === "object"
-      && !Array.isArray(parsed)
-      && Object.hasOwn(parsed, "schemaVersion")
-      && parsed.schemaVersion !== 1
-      && parsed.schemaVersion !== LOCAL_WORKSPACE_SCHEMA_VERSION
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      Object.hasOwn(parsed, "schemaVersion") &&
+      parsed.schemaVersion !== 1 &&
+      parsed.schemaVersion !== LOCAL_WORKSPACE_SCHEMA_VERSION
     ) {
       throw new Error(
-        "This offline preview was created by an unsupported app version. Its stored data was left untouched."
+        "This offline preview was created by an unsupported app version. Its stored data was left untouched.",
       );
     }
 
@@ -455,19 +440,19 @@ export function persistOfflinePreviewWorkspace() {
       JSON.stringify({
         schemaVersion: LOCAL_WORKSPACE_SCHEMA_VERSION,
         userSettings: appState.userSettings,
-        dailyLogs:    appState.dailyLogs,
-        workoutLogs:  appState.workoutLogs,
+        dailyLogs: appState.dailyLogs,
+        workoutLogs: appState.workoutLogs,
         profile: {
           displayName: appState.currentUser?.displayName || "Offline Preview",
-          email:       appState.currentUser?.email       || "preview@health-ledger.local",
-          photoURL:    appState.currentUser?.photoURL    || "",
+          email: appState.currentUser?.email || "preview@health-ledger.local",
+          photoURL: appState.currentUser?.photoURL || "",
         },
       }),
     );
   } catch (error) {
     console.error("persistOfflinePreviewWorkspace:", error);
     throw new Error(
-      "Preview data could not be saved to browser storage (it may be full or blocked), so this change was not stored."
+      "Preview data could not be saved to browser storage (it may be full or blocked), so this change was not stored.",
     );
   }
 }
@@ -480,7 +465,7 @@ export function persistOfflinePreviewWorkspace() {
 export async function importWorkspaceBackup(backupPayload) {
   const normalizedBackup = normalizeBackupPayload(backupPayload);
   const existingWorkoutSignatures = new Set(
-    appState.workoutLogs.map((log) => getWorkoutSignature(log))
+    appState.workoutLogs.map((log) => getWorkoutSignature(log)),
   );
 
   let dailyImported = 0;

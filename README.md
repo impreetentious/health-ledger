@@ -36,11 +36,13 @@ Requires Node 20.10+ only if you want to run the tests; the app itself needs not
 
 2. Set your deploy-time configuration. Recommended — use the gitignored local
    override so real values never land in a git-tracked file:
+
    - copy the template: `cp js/runtime-config.local.example.js js/runtime-config.local.js`
    - edit [`js/runtime-config.local.js`](js/runtime-config.local.js) and fill in your real values
 
    Alternatively, edit the git-tracked [`js/runtime-config.js`](js/runtime-config.js) or the
    placeholders in [`js/config.js`](js/config.js) directly — but avoid committing real values if you do.
+
 3. Provide:
    - Firebase web app config
    - EmailJS public key
@@ -176,4 +178,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.4.0
+**Version:** v2.5.0

@@ -44,12 +44,12 @@ const FOCUSABLE_SELECTOR = [
 export function setSessionState(user) {
   if (!user) {
     dom.sessionLabel.textContent = "Sign in to sync your Health Ledger privately to the cloud.";
-    dom.profileShell.hidden      = true;
+    dom.profileShell.hidden = true;
     dom.profileTrigger.setAttribute("aria-expanded", "false");
-    dom.profileMenu.hidden       = true;
-    dom.profileName.textContent    = "Health Ledger User";
+    dom.profileMenu.hidden = true;
+    dom.profileName.textContent = "Health Ledger User";
     dom.profileSubtitle.textContent = "My Profile";
-    dom.profileAvatarImage.hidden  = true;
+    dom.profileAvatarImage.hidden = true;
     dom.profileAvatarImage.removeAttribute("src");
     dom.profileAvatarFallback.hidden = false;
     return;
@@ -61,15 +61,15 @@ export function setSessionState(user) {
 
   dom.profileShell.hidden = false;
   dom.profileTrigger.setAttribute("aria-expanded", "false");
-  dom.profileMenu.hidden  = true;
+  dom.profileMenu.hidden = true;
 
-  dom.profileName.textContent     = getFriendlyUserName(user);
+  dom.profileName.textContent = getFriendlyUserName(user);
   dom.profileSubtitle.textContent = appState.previewMode
     ? "Stored in this browser"
     : user.email || "My Profile";
 
   if (user.photoURL) {
-    dom.profileAvatarImage.src    = user.photoURL;
+    dom.profileAvatarImage.src = user.photoURL;
     dom.profileAvatarImage.hidden = false;
     dom.profileAvatarFallback.hidden = true;
   } else {
@@ -90,15 +90,13 @@ export function setSessionState(user) {
 export function setLoadingState(
   isVisible,
   message = "Working...",
-  title   = "Syncing Health Ledger",
+  title = "Syncing Health Ledger",
 ) {
-  activeBlockingLoads = isVisible
-    ? activeBlockingLoads + 1
-    : Math.max(0, activeBlockingLoads - 1);
+  activeBlockingLoads = isVisible ? activeBlockingLoads + 1 : Math.max(0, activeBlockingLoads - 1);
 
   if (isVisible) {
     dom.loadingLabel.textContent = title;
-    dom.loadingCopy.textContent  = message;
+    dom.loadingCopy.textContent = message;
   }
 
   dom.loadingOverlay.hidden = activeBlockingLoads === 0;
@@ -151,7 +149,7 @@ export function setAppLocked(isLocked) {
  */
 export function setAuthFeedback(message, tone = "") {
   dom.authFeedback.textContent = message;
-  dom.authFeedback.className   = "auth-feedback";
+  dom.authFeedback.className = "auth-feedback";
   if (tone) dom.authFeedback.classList.add(tone);
 }
 
@@ -179,7 +177,9 @@ export function setAuthPending(isPending) {
     dom.passwordResetButton,
     dom.passwordVisibilityButton,
     dom.offlinePreviewButton,
-  ].forEach((el) => { el.disabled = isPending; });
+  ].forEach((el) => {
+    el.disabled = isPending;
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -397,9 +397,9 @@ export function getActiveViewName() {
  * today's date string, then writes it into the quote card.
  */
 export function setDailyQuote() {
-  const index  = hashString(getLocalDateString()) % DAILY_QUOTES.length;
-  const quote  = DAILY_QUOTES[index];
-  dom.dailyQuoteText.textContent   = quote.text;
+  const index = hashString(getLocalDateString()) % DAILY_QUOTES.length;
+  const quote = DAILY_QUOTES[index];
+  dom.dailyQuoteText.textContent = quote.text;
   dom.dailyQuoteSource.textContent = quote.source;
 }
 

@@ -77,7 +77,7 @@ export async function signInWithGoogle() {
   const userCredential = await signInWithPopup(auth, googleProvider);
   const additionalInfo = getAdditionalUserInfo(userCredential);
   return {
-    user:      userCredential.user,
+    user: userCredential.user,
     isNewUser: additionalInfo?.isNewUser ?? false,
   };
 }
@@ -156,7 +156,7 @@ export async function updateUserProfile(displayName, photoURL) {
   assertFirebaseConfigured();
   await updateProfile(auth.currentUser, {
     displayName: displayName || null,
-    photoURL:    photoURL    || null,
+    photoURL: photoURL || null,
   });
   return auth.currentUser;
 }
@@ -200,14 +200,14 @@ export function getGoogleCredentialFromError(error) {
 export async function sendWelcomeEmail(user) {
   await sendEmailJsTemplate(EMAILJS_WELCOME_TEMPLATE_ID, {
     user_name: getFriendlyUserName(user),
-    to_email:  user.email || "",
+    to_email: user.email || "",
   });
 }
 
 /** Sends the account-deletion goodbye email via EmailJS. */
 export async function sendGoodbyeEmail(user) {
   await sendEmailJsTemplate(EMAILJS_LEAVING_TEMPLATE_ID, {
-    name:     getFriendlyUserName(user),
+    name: getFriendlyUserName(user),
     to_email: user.email || "",
   });
 }
@@ -219,16 +219,14 @@ export async function sendGoodbyeEmail(user) {
 async function sendEmailJsTemplate(templateId, templateParams) {
   if (!isEmailJsConfigured()) {
     throw new Error(
-      "EmailJS is not configured yet. Add your EmailJS public key, service ID, and template IDs in js/config.js."
+      "EmailJS is not configured yet. Add your EmailJS public key, service ID, and template IDs in js/config.js.",
     );
   }
 
   const emailClient = globalThis.emailjs;
 
   if (!emailClient?.send) {
-    throw new Error(
-      "Email service is unavailable. Please try again once EmailJS has loaded.",
-    );
+    throw new Error("Email service is unavailable. Please try again once EmailJS has loaded.");
   }
 
   await emailClient.send(EMAILJS_SERVICE_ID, templateId, templateParams);

@@ -13,11 +13,7 @@
     8. CSV parsing
 */
 
-import {
-  DEFAULT_SETTINGS,
-  MACRO_CALORIE_MARGIN,
-  BACKUP_SCHEMA_VERSION,
-} from "./config.js";
+import { DEFAULT_SETTINGS, MACRO_CALORIE_MARGIN, BACKUP_SCHEMA_VERSION } from "./config.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Date helpers
@@ -42,9 +38,9 @@ export function toDateAtNoon(dateInput) {
 /** Returns the local date as a YYYY-MM-DD string. Defaults to today. */
 export function getLocalDateString(dateInput = new Date()) {
   const date = dateInput instanceof Date ? dateInput : toDateAtNoon(dateInput);
-  const year  = date.getFullYear();
+  const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day   = String(date.getDate()).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -66,11 +62,7 @@ export function isValidIsoDateString(value) {
   if (!match) return false;
   const [year, month, day] = match.slice(1).map(Number);
   const date = new Date(year, month - 1, day, 12);
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day
-  );
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
 /**
@@ -94,9 +86,9 @@ export function formatLongDate(dateInput) {
   const date = dateInput instanceof Date ? dateInput : toDateAtNoon(dateInput);
   return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
-    month:   "long",
-    day:     "numeric",
-    year:    "numeric",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   }).format(date);
 }
 
@@ -108,12 +100,12 @@ export function formatShortDateLabel(dateInput) {
 
 /** Returns the ISO week number and year for any date. */
 export function getIsoWeekInfo(dateInput) {
-  const date     = toDateAtNoon(dateInput);
+  const date = toDateAtNoon(dateInput);
   const thursday = new Date(date);
   thursday.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
   const firstThursday = new Date(thursday.getFullYear(), 0, 4);
-  const diffInDays    = Math.round((thursday - firstThursday) / 86400000);
-  const week          = 1 + Math.floor((diffInDays + ((firstThursday.getDay() + 6) % 7)) / 7);
+  const diffInDays = Math.round((thursday - firstThursday) / 86400000);
+  const week = 1 + Math.floor((diffInDays + ((firstThursday.getDay() + 6) % 7)) / 7);
   return { year: thursday.getFullYear(), week };
 }
 
@@ -122,21 +114,21 @@ export function getIsoWeekInfo(dateInput) {
  * Week starts on Monday (ISO 8601 convention).
  */
 export function getWeekInfoForDate(dateInput) {
-  const date               = toDateAtNoon(dateInput);
+  const date = toDateAtNoon(dateInput);
   const distanceFromMonday = (date.getDay() + 6) % 7;
-  const weekStart          = new Date(date);
+  const weekStart = new Date(date);
   weekStart.setDate(date.getDate() - distanceFromMonday);
   weekStart.setHours(0, 0, 0, 0);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
   const isoInfo = getIsoWeekInfo(weekStart);
   return {
-    key:   `${isoInfo.year}-W${String(isoInfo.week).padStart(2, "0")}`,
+    key: `${isoInfo.year}-W${String(isoInfo.week).padStart(2, "0")}`,
     label: `Week ${isoInfo.week}, ${isoInfo.year}`,
     start: getLocalDateString(weekStart),
-    end:   getLocalDateString(weekEnd),
-    week:  isoInfo.week,
-    year:  isoInfo.year,
+    end: getLocalDateString(weekEnd),
+    week: isoInfo.week,
+    year: isoInfo.year,
   };
 }
 
@@ -152,9 +144,9 @@ export function getPreviousWeekInfo(weekInfo) {
 
 /** Returns an array of YYYY-MM-DD strings for every day in [startDate, endDate]. */
 export function getDateStringsInRange(startDate, endDate) {
-  const dates  = [];
+  const dates = [];
   const cursor = toDateAtNoon(startDate);
-  const end    = toDateAtNoon(endDate);
+  const end = toDateAtNoon(endDate);
   while (cursor <= end) {
     dates.push(getLocalDateString(cursor));
     cursor.setDate(cursor.getDate() + 1);
@@ -218,9 +210,9 @@ export function isNumber(value) {
 /** Human-readable byte size string, e.g. "12.3 KB". */
 export function formatBytes(bytes) {
   if (!isNumber(bytes) || bytes <= 0) return "0 B";
-  const units    = ["B", "KB", "MB", "GB"];
+  const units = ["B", "KB", "MB", "GB"];
   const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value    = bytes / 1024 ** exponent;
+  const value = bytes / 1024 ** exponent;
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
@@ -236,9 +228,9 @@ export function hashString(value) {
 /** Escapes the five HTML special characters so values are safe for innerHTML. */
 export function escapeHtml(value) {
   return String(value)
-    .replaceAll("&",  "&amp;")
-    .replaceAll("<",  "&lt;")
-    .replaceAll(">",  "&gt;")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
@@ -257,9 +249,8 @@ export function formatNumberForDisplay(value) {
 /** Converts a Firebase error code into a human-readable sentence. */
 export function formatFirebaseError(error) {
   if (!error) return "Something went wrong.";
-  const code = typeof error.code === "string"
-    ? error.code.replace("auth/", "").replace("firestore/", "")
-    : "";
+  const code =
+    typeof error.code === "string" ? error.code.replace("auth/", "").replace("firestore/", "") : "";
   if (!code) return error.message || "Something went wrong.";
   return code
     .split(/[-_/]/)
@@ -315,15 +306,15 @@ export function cloneDefaultSettings() {
 export function createEmptyDailyLog(date) {
   return {
     date,
-    weight:   null,
+    weight: null,
     calories: null,
-    macros:            { protein: null, carbs: null, fat: null },
-    macroPercentages:  { protein: null, carbs: null, fat: null },
-    steps:  null,
-    sleep:  null,
-    water:  { glasses: null, targetGlasses: null, unitAmountMl: null },
+    macros: { protein: null, carbs: null, fat: null },
+    macroPercentages: { protein: null, carbs: null, fat: null },
+    steps: null,
+    sleep: null,
+    water: { glasses: null, targetGlasses: null, unitAmountMl: null },
     energy: null,
-    notes:  "",
+    notes: "",
   };
 }
 
@@ -334,30 +325,42 @@ export function createEmptyDailyLog(date) {
  */
 export function mergeDailyLogs(baseLog, incomingLog) {
   return {
-    date:     incomingLog.date || baseLog.date,
-    weight:   toNumberOrNull(incomingLog.weight)   ?? baseLog.weight   ?? null,
+    date: incomingLog.date || baseLog.date,
+    weight: toNumberOrNull(incomingLog.weight) ?? baseLog.weight ?? null,
     calories: toNumberOrNull(incomingLog.calories) ?? baseLog.calories ?? null,
     macros: {
       protein: toNumberOrNull(incomingLog.macros?.protein) ?? baseLog.macros.protein ?? null,
-      carbs:   toNumberOrNull(incomingLog.macros?.carbs)   ?? baseLog.macros.carbs   ?? null,
-      fat:     toNumberOrNull(incomingLog.macros?.fat)     ?? baseLog.macros.fat     ?? null,
+      carbs: toNumberOrNull(incomingLog.macros?.carbs) ?? baseLog.macros.carbs ?? null,
+      fat: toNumberOrNull(incomingLog.macros?.fat) ?? baseLog.macros.fat ?? null,
     },
     macroPercentages: {
-      protein: toNumberOrNull(incomingLog.macroPercentages?.protein) ?? baseLog.macroPercentages.protein ?? null,
-      carbs:   toNumberOrNull(incomingLog.macroPercentages?.carbs)   ?? baseLog.macroPercentages.carbs   ?? null,
-      fat:     toNumberOrNull(incomingLog.macroPercentages?.fat)     ?? baseLog.macroPercentages.fat     ?? null,
+      protein:
+        toNumberOrNull(incomingLog.macroPercentages?.protein) ??
+        baseLog.macroPercentages.protein ??
+        null,
+      carbs:
+        toNumberOrNull(incomingLog.macroPercentages?.carbs) ??
+        baseLog.macroPercentages.carbs ??
+        null,
+      fat:
+        toNumberOrNull(incomingLog.macroPercentages?.fat) ?? baseLog.macroPercentages.fat ?? null,
     },
     steps: toNumberOrNull(incomingLog.steps) ?? baseLog.steps ?? null,
     sleep: toNumberOrNull(incomingLog.sleep) ?? baseLog.sleep ?? null,
     water: {
-      glasses:       toNumberOrNull(incomingLog.water?.glasses)       ?? baseLog.water.glasses       ?? null,
-      targetGlasses: toNumberOrNull(incomingLog.water?.targetGlasses) ?? baseLog.water.targetGlasses ?? null,
-      unitAmountMl:  toNumberOrNull(incomingLog.water?.unitAmountMl)  ?? baseLog.water.unitAmountMl  ?? null,
+      glasses: toNumberOrNull(incomingLog.water?.glasses) ?? baseLog.water.glasses ?? null,
+      targetGlasses:
+        toNumberOrNull(incomingLog.water?.targetGlasses) ?? baseLog.water.targetGlasses ?? null,
+      unitAmountMl:
+        toNumberOrNull(incomingLog.water?.unitAmountMl) ?? baseLog.water.unitAmountMl ?? null,
     },
     energy: toNumberOrNull(incomingLog.energy) ?? baseLog.energy ?? null,
-    notes: typeof incomingLog.notes === "string"
-      ? incomingLog.notes.trim()
-      : typeof baseLog.notes === "string" ? baseLog.notes : "",
+    notes:
+      typeof incomingLog.notes === "string"
+        ? incomingLog.notes.trim()
+        : typeof baseLog.notes === "string"
+          ? baseLog.notes
+          : "",
   };
 }
 
@@ -367,12 +370,12 @@ export function mergeDailyLogs(baseLog, incomingLog) {
  * they were not stored directly.
  */
 export function normalizeDailyLog(log) {
-  const normalized         = mergeDailyLogs(createEmptyDailyLog(log.date || getLocalDateString()), log);
+  const normalized = mergeDailyLogs(createEmptyDailyLog(log.date || getLocalDateString()), log);
   const derivedPercentages = deriveMacroPercentages(normalized.calories, normalized.macros);
   normalized.macroPercentages = {
     protein: normalized.macroPercentages.protein ?? derivedPercentages.protein,
-    carbs:   normalized.macroPercentages.carbs   ?? derivedPercentages.carbs,
-    fat:     normalized.macroPercentages.fat     ?? derivedPercentages.fat,
+    carbs: normalized.macroPercentages.carbs ?? derivedPercentages.carbs,
+    fat: normalized.macroPercentages.fat ?? derivedPercentages.fat,
   };
   return normalized;
 }
@@ -383,13 +386,13 @@ export function normalizeExercise(exercise) {
   const sets = Array.isArray(exercise.sets)
     ? exercise.sets
         .map((set) => ({
-          reps:   toNumberOrNull(set?.reps),
+          reps: toNumberOrNull(set?.reps),
           weight: toNumberOrNull(set?.weight),
         }))
         .filter((set) => set.reps !== null || set.weight !== null)
     : [];
   return {
-    name:         (exercise.name         || "").trim(),
+    name: (exercise.name || "").trim(),
     muscle_group: (exercise.muscle_group || "").trim(),
     sets,
   };
@@ -398,11 +401,11 @@ export function normalizeExercise(exercise) {
 /** Ensures a raw workout log has every expected field. */
 export function normalizeWorkoutLog(log) {
   return {
-    id:           log.id || "",
-    date:         log.date || getLocalDateString(),
+    id: log.id || "",
+    date: log.date || getLocalDateString(),
     session_type: (log.session_type || "").trim(),
-    duration:     toNumberOrNull(log.duration),
-    exercises:    Array.isArray(log.exercises)
+    duration: toNumberOrNull(log.duration),
+    exercises: Array.isArray(log.exercises)
       ? log.exercises.map(normalizeExercise).filter(Boolean)
       : [],
   };
@@ -411,15 +414,19 @@ export function normalizeWorkoutLog(log) {
 /** Applies DEFAULT_SETTINGS fallbacks to any partial settings object. */
 export function normalizeUserSettings(settings) {
   return {
-    calorieTarget:     toNumberOrNull(settings?.calorieTarget)     ?? DEFAULT_SETTINGS.calorieTarget,
-    proteinGramTarget: toNumberOrNull(settings?.proteinGramTarget) ?? DEFAULT_SETTINGS.proteinGramTarget,
+    calorieTarget: toNumberOrNull(settings?.calorieTarget) ?? DEFAULT_SETTINGS.calorieTarget,
+    proteinGramTarget:
+      toNumberOrNull(settings?.proteinGramTarget) ?? DEFAULT_SETTINGS.proteinGramTarget,
     macroTarget: {
-      protein: toNumberOrNull(settings?.macroTarget?.protein) ?? DEFAULT_SETTINGS.macroTarget.protein,
-      carbs:   toNumberOrNull(settings?.macroTarget?.carbs)   ?? DEFAULT_SETTINGS.macroTarget.carbs,
-      fat:     toNumberOrNull(settings?.macroTarget?.fat)     ?? DEFAULT_SETTINGS.macroTarget.fat,
+      protein:
+        toNumberOrNull(settings?.macroTarget?.protein) ?? DEFAULT_SETTINGS.macroTarget.protein,
+      carbs: toNumberOrNull(settings?.macroTarget?.carbs) ?? DEFAULT_SETTINGS.macroTarget.carbs,
+      fat: toNumberOrNull(settings?.macroTarget?.fat) ?? DEFAULT_SETTINGS.macroTarget.fat,
     },
-    waterTargetGlasses: toNumberOrNull(settings?.waterTargetGlasses) ?? DEFAULT_SETTINGS.waterTargetGlasses,
-    waterUnitAmountMl:  toNumberOrNull(settings?.waterUnitAmountMl)  ?? DEFAULT_SETTINGS.waterUnitAmountMl,
+    waterTargetGlasses:
+      toNumberOrNull(settings?.waterTargetGlasses) ?? DEFAULT_SETTINGS.waterTargetGlasses,
+    waterUnitAmountMl:
+      toNumberOrNull(settings?.waterUnitAmountMl) ?? DEFAULT_SETTINGS.waterUnitAmountMl,
   };
 }
 
@@ -431,10 +438,10 @@ export function buildDailyLogMap(logs) {
 /** Builds the synthetic user object used in offline preview mode. */
 export function buildOfflinePreviewUser(profile = {}) {
   return {
-    uid:         "offline-preview",
+    uid: "offline-preview",
     displayName: profile.displayName?.trim() || "Offline Preview",
-    email:       profile.email               || "preview@health-ledger.local",
-    photoURL:    profile.photoURL            || "",
+    email: profile.email || "preview@health-ledger.local",
+    photoURL: profile.photoURL || "",
   };
 }
 
@@ -486,14 +493,18 @@ export function normalizeBackupPayload(payload = {}) {
 
   if (version > BACKUP_SCHEMA_VERSION) {
     throw new Error(
-      `This backup was created by a newer Health Ledger version (v${version}). Update the app before importing it.`
+      `This backup was created by a newer Health Ledger version (v${version}). Update the app before importing it.`,
     );
   }
 
   const hasUserSettings = Object.hasOwn(payload, "userSettings");
-  if (!hasUserSettings && !Object.hasOwn(payload, "dailyLogs") && !Object.hasOwn(payload, "workoutLogs")) {
+  if (
+    !hasUserSettings &&
+    !Object.hasOwn(payload, "dailyLogs") &&
+    !Object.hasOwn(payload, "workoutLogs")
+  ) {
     throw new Error(
-      "That file is not a Health Ledger backup — it has no settings, daily logs, or workout logs."
+      "That file is not a Health Ledger backup — it has no settings, daily logs, or workout logs.",
     );
   }
 
@@ -517,14 +528,14 @@ export function normalizeBackupPayload(payload = {}) {
   (payload.dailyLogs || []).forEach((log, index) => {
     if (!log || typeof log !== "object" || !isValidIsoDateString(log.date)) {
       throw new Error(
-        `Invalid backup: daily log entry ${index + 1} is missing a valid YYYY-MM-DD date.`
+        `Invalid backup: daily log entry ${index + 1} is missing a valid YYYY-MM-DD date.`,
       );
     }
   });
   (payload.workoutLogs || []).forEach((log, index) => {
     if (!log || typeof log !== "object" || !isValidIsoDateString(log.date)) {
       throw new Error(
-        `Invalid backup: workout entry ${index + 1} is missing a valid YYYY-MM-DD date.`
+        `Invalid backup: workout entry ${index + 1} is missing a valid YYYY-MM-DD date.`,
       );
     }
   });
@@ -558,9 +569,13 @@ export function deriveMacroPercentages(calories, macros) {
     return { protein: null, carbs: null, fat: null };
   }
   return {
-    protein: isNumber(macros?.protein) ? roundToOneDecimal(((macros.protein * 4) / calories) * 100) : null,
-    carbs:   isNumber(macros?.carbs)   ? roundToOneDecimal(((macros.carbs   * 4) / calories) * 100) : null,
-    fat:     isNumber(macros?.fat)     ? roundToOneDecimal(((macros.fat     * 9) / calories) * 100) : null,
+    protein: isNumber(macros?.protein)
+      ? roundToOneDecimal(((macros.protein * 4) / calories) * 100)
+      : null,
+    carbs: isNumber(macros?.carbs)
+      ? roundToOneDecimal(((macros.carbs * 4) / calories) * 100)
+      : null,
+    fat: isNumber(macros?.fat) ? roundToOneDecimal(((macros.fat * 9) / calories) * 100) : null,
   };
 }
 
@@ -575,25 +590,25 @@ export function buildMacroPayloadFromInputs(
   proteinInput,
   carbInput,
   fatInput,
-  macroMode  = "percentage",
-  isPreview  = false,
+  macroMode = "percentage",
+  isPreview = false,
 ) {
   // hasCalories requires > 0 because percentage math divides by calories;
   // an explicit 0 (e.g. a fasting day) is still a valid value to store.
-  const hasCalories  = isNumber(calories) && calories > 0;
+  const hasCalories = isNumber(calories) && calories > 0;
   const storableCalories = isNumber(calories) && calories >= 0 ? calories : null;
-  const hasProtein   = isNumber(proteinInput);
-  const hasCarbs     = isNumber(carbInput);
-  const hasFat       = isNumber(fatInput);
-  const hasAnyMacro  = hasProtein || hasCarbs || hasFat;
+  const hasProtein = isNumber(proteinInput);
+  const hasCarbs = isNumber(carbInput);
+  const hasFat = isNumber(fatInput);
+  const hasAnyMacro = hasProtein || hasCarbs || hasFat;
   const hasAllMacros = hasProtein && hasCarbs && hasFat;
 
   if (!hasAnyMacro) {
     return {
-      calories:         storableCalories,
-      macros:           { protein: null, carbs: null, fat: null },
+      calories: storableCalories,
+      macros: { protein: null, carbs: null, fat: null },
       macroPercentages: { protein: null, carbs: null, fat: null },
-      assignedPercent:  null,
+      assignedPercent: null,
       remainingPercent: null,
     };
   }
@@ -614,8 +629,8 @@ export function buildMacroPayloadFromInputs(
   if (macroMode === "grams") {
     const calculatedCalories = calculateMacroCaloriesFromGrams({
       protein: proteinInput,
-      carbs:   carbInput,
-      fat:     fatInput,
+      carbs: carbInput,
+      fat: fatInput,
     });
     const resolvedCalories = hasCalories ? calories : Math.round(calculatedCalories);
 
@@ -630,14 +645,16 @@ export function buildMacroPayloadFromInputs(
 
     return {
       calories: resolvedCalories,
-      macros:   { protein: proteinInput, carbs: carbInput, fat: fatInput },
+      macros: { protein: proteinInput, carbs: carbInput, fat: fatInput },
       macroPercentages: deriveMacroPercentages(resolvedCalories, {
         protein: proteinInput,
-        carbs:   carbInput,
-        fat:     fatInput,
+        carbs: carbInput,
+        fat: fatInput,
       }),
-      assignedPercent:      hasCalories ? roundToOneDecimal((calculatedCalories / calories) * 100) : 100,
-      remainingPercent:     hasCalories ? roundToOneDecimal(100 - (calculatedCalories / calories) * 100) : 0,
+      assignedPercent: hasCalories ? roundToOneDecimal((calculatedCalories / calories) * 100) : 100,
+      remainingPercent: hasCalories
+        ? roundToOneDecimal(100 - (calculatedCalories / calories) * 100)
+        : 0,
       calculatedCalories,
       autoCalculatedCalories: !hasCalories,
     };
@@ -661,16 +678,16 @@ export function buildMacroPayloadFromInputs(
   }
 
   const macros = {
-    protein: roundToOneDecimal(((calories * proteinInput) / 100) / 4),
-    carbs:   roundToOneDecimal(((calories * carbInput)   / 100) / 4),
-    fat:     roundToOneDecimal(((calories * fatInput)    / 100) / 9),
+    protein: roundToOneDecimal((calories * proteinInput) / 100 / 4),
+    carbs: roundToOneDecimal((calories * carbInput) / 100 / 4),
+    fat: roundToOneDecimal((calories * fatInput) / 100 / 9),
   };
 
   return {
     calories,
     macros,
     macroPercentages: { protein: proteinInput, carbs: carbInput, fat: fatInput },
-    assignedPercent:  roundToOneDecimal(assignedPercent),
+    assignedPercent: roundToOneDecimal(assignedPercent),
     remainingPercent: roundToOneDecimal(100 - assignedPercent),
   };
 }
@@ -679,8 +696,8 @@ export function buildMacroPayloadFromInputs(
 export function getMacroCaloriesBreakdown(log) {
   return {
     protein: isNumber(log.macros.protein) ? log.macros.protein * 4 : 0,
-    carbs:   isNumber(log.macros.carbs)   ? log.macros.carbs   * 4 : 0,
-    fat:     isNumber(log.macros.fat)     ? log.macros.fat     * 9 : 0,
+    carbs: isNumber(log.macros.carbs) ? log.macros.carbs * 4 : 0,
+    fat: isNumber(log.macros.fat) ? log.macros.fat * 9 : 0,
   };
 }
 
@@ -690,16 +707,19 @@ export function getMacroCaloriesBreakdown(log) {
 
 /** Converts glasses logged in a daily log to litres. Returns null if data is missing. */
 export function getWaterLitersFromLog(log, settings) {
-  const glasses      = toNumberOrNull(log?.water?.glasses);
-  const unitAmountMl = toNumberOrNull(log?.water?.unitAmountMl) ?? toNumberOrNull(settings?.waterUnitAmountMl);
+  const glasses = toNumberOrNull(log?.water?.glasses);
+  const unitAmountMl =
+    toNumberOrNull(log?.water?.unitAmountMl) ?? toNumberOrNull(settings?.waterUnitAmountMl);
   if (!isNumber(glasses) || !isNumber(unitAmountMl)) return null;
   return roundToOneDecimal((glasses * unitAmountMl) / 1000);
 }
 
 /** Converts the water target for a day to litres. Returns null if data is missing. */
 export function getWaterTargetLiters(log, settings) {
-  const targetGlasses = toNumberOrNull(log?.water?.targetGlasses) ?? toNumberOrNull(settings?.waterTargetGlasses);
-  const unitAmountMl  = toNumberOrNull(log?.water?.unitAmountMl)  ?? toNumberOrNull(settings?.waterUnitAmountMl);
+  const targetGlasses =
+    toNumberOrNull(log?.water?.targetGlasses) ?? toNumberOrNull(settings?.waterTargetGlasses);
+  const unitAmountMl =
+    toNumberOrNull(log?.water?.unitAmountMl) ?? toNumberOrNull(settings?.waterUnitAmountMl);
   if (!isNumber(targetGlasses) || !isNumber(unitAmountMl)) return null;
   return roundToOneDecimal((targetGlasses * unitAmountMl) / 1000);
 }
@@ -712,8 +732,8 @@ export function getWaterTargetLiters(log, settings) {
 export function formatMacroHistory(log) {
   return [
     `P ${isNumber(log.macros.protein) ? `${log.macros.protein} g` : "-"}`,
-    `C ${isNumber(log.macros.carbs)   ? `${log.macros.carbs} g`   : "-"}`,
-    `F ${isNumber(log.macros.fat)     ? `${log.macros.fat} g`     : "-"}`,
+    `C ${isNumber(log.macros.carbs) ? `${log.macros.carbs} g` : "-"}`,
+    `F ${isNumber(log.macros.fat) ? `${log.macros.fat} g` : "-"}`,
   ].join(" / ");
 }
 
@@ -741,7 +761,7 @@ export function splitCsvRow(row) {
   let insideQuotes = false;
 
   for (let i = 0; i < row.length; i += 1) {
-    const ch   = row[i];
+    const ch = row[i];
     const next = row[i + 1];
 
     if (ch === '"' && insideQuotes && next === '"') {
@@ -767,50 +787,54 @@ export function splitCsvRow(row) {
  * Throws a descriptive Error on any validation failure.
  */
 export function parseLegacyCsv(csvText) {
-  const rows = csvText.trim().replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+  const rows = csvText
+    .trim()
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .filter(Boolean);
 
   if (rows.length < 2) {
     throw new Error("The CSV file must include a header row and at least one data row.");
   }
 
-  const headers         = splitCsvRow(rows[0]).map((h) => h.trim().toLowerCase());
+  const headers = splitCsvRow(rows[0]).map((h) => h.trim().toLowerCase());
   const requiredHeaders = ["date", "weight", "calories", "protein", "carbs", "fat"];
-  const missingHeaders  = requiredHeaders.filter((h) => !headers.includes(h));
+  const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h));
 
   if (missingHeaders.length > 0) {
     throw new Error(`Missing CSV columns: ${missingHeaders.join(", ")}.`);
   }
 
   return rows.slice(1).map((row, index) => {
-    const values    = splitCsvRow(row);
+    const values = splitCsvRow(row);
     const rowObject = Object.fromEntries(
-      headers.map((header, position) => [header, values[position] ?? ""])
+      headers.map((header, position) => [header, values[position] ?? ""]),
     );
     const normalizedDate = normalizeCsvDate(rowObject.date);
 
     if (!normalizedDate) {
       throw new Error(
-        `Invalid date in CSV row ${index + 2}. Use YYYY-MM-DD or a parseable date value.`
+        `Invalid date in CSV row ${index + 2}. Use YYYY-MM-DD or a parseable date value.`,
       );
     }
 
     const macros = {
       protein: toNumberOrNull(rowObject.protein),
-      carbs:   toNumberOrNull(rowObject.carbs),
-      fat:     toNumberOrNull(rowObject.fat),
+      carbs: toNumberOrNull(rowObject.carbs),
+      fat: toNumberOrNull(rowObject.fat),
     };
 
     return {
-      date:             normalizedDate,
-      weight:           toNumberOrNull(rowObject.weight),
-      calories:         toNumberOrNull(rowObject.calories),
+      date: normalizedDate,
+      weight: toNumberOrNull(rowObject.weight),
+      calories: toNumberOrNull(rowObject.calories),
       macros,
       macroPercentages: deriveMacroPercentages(toNumberOrNull(rowObject.calories), macros),
-      steps:  null,
-      sleep:  null,
-      water:  { glasses: null, targetGlasses: null, unitAmountMl: null },
+      steps: null,
+      sleep: null,
+      water: { glasses: null, targetGlasses: null, unitAmountMl: null },
       energy: null,
-      notes:  "",
+      notes: "",
     };
   });
 }

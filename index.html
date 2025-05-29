@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -12,13 +12,7 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="favicon.svg" />
-    <link
-      rel="preload"
-      href="fonts/InterVariable.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
+    <link rel="preload" href="fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="css/style.css" />
     <script
       defer
@@ -26,10 +20,7 @@
       integrity="sha384-Sse/HDqcypGpyTDpvZOJNnG0TT3feGQUkF9H+mnRvic+LjR+K1NhTt8f51KIQ3v3"
       crossorigin="anonymous"
     ></script>
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"
-    ></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="js/runtime-config.js"></script>
     <script src="js/runtime-config.local.js"></script>
     <script type="module" src="js/app.js"></script>
@@ -67,8 +58,17 @@
                     alt="Profile avatar"
                     hidden
                   />
-                  <span id="profile-avatar-fallback" class="profile-avatar-fallback" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" class="avatar-glyph" focusable="false" aria-hidden="true">
+                  <span
+                    id="profile-avatar-fallback"
+                    class="profile-avatar-fallback"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      class="avatar-glyph"
+                      focusable="false"
+                      aria-hidden="true"
+                    >
                       <path
                         d="M12 12.25a4.25 4.25 0 1 0 0-8.5 4.25 4.25 0 0 0 0 8.5Zm0 2.5c-4.35 0-7.75 2.3-7.75 5.25 0 .41.34.75.75.75h14c.41 0 .75-.34.75-.75 0-2.95-3.4-5.25-7.75-5.25Z"
                         fill="currentColor"
@@ -84,7 +84,12 @@
               </button>
 
               <div id="profile-menu" class="profile-menu" role="menu" hidden>
-                <button type="button" id="account-menu-button" class="profile-menu-item" role="menuitem">
+                <button
+                  type="button"
+                  id="account-menu-button"
+                  class="profile-menu-item"
+                  role="menuitem"
+                >
                   <span>My Account</span>
                   <small>Edit name and profile image</small>
                 </button>
@@ -97,7 +102,12 @@
                   <span>Preferences</span>
                   <small>Targets, macros, and water defaults</small>
                 </button>
-                <button type="button" id="logout-menu-button" class="profile-menu-item logout-item" role="menuitem">
+                <button
+                  type="button"
+                  id="logout-menu-button"
+                  class="profile-menu-item logout-item"
+                  role="menuitem"
+                >
                   <span class="logout-item-label">
                     <svg viewBox="0 0 24 24" class="menu-icon" focusable="false" aria-hidden="true">
                       <path
@@ -120,7 +130,9 @@
           </article>
 
           <nav class="main-nav" aria-label="Primary">
-            <button class="nav-button active" data-view="dashboard" aria-current="page">Dashboard</button>
+            <button class="nav-button active" data-view="dashboard" aria-current="page">
+              Dashboard
+            </button>
             <button class="nav-button" data-view="entry">Data Entry</button>
             <button class="nav-button" data-view="history">History</button>
           </nav>
@@ -131,7 +143,12 @@
 
       <main id="main-content" class="view-stack" tabindex="-1">
         <section id="dashboard-view" class="view active" aria-labelledby="dashboard-heading">
-          <div id="dashboard-hydration-skeleton" class="dashboard-hydration-skeleton" hidden aria-hidden="true">
+          <div
+            id="dashboard-hydration-skeleton"
+            class="dashboard-hydration-skeleton"
+            hidden
+            aria-hidden="true"
+          >
             <span class="dashboard-skeleton-line dashboard-skeleton-line--title"></span>
             <span class="dashboard-skeleton-line dashboard-skeleton-line--copy"></span>
             <div class="dashboard-skeleton-cards" aria-hidden="true">
@@ -173,7 +190,13 @@
             >
               <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
                 <circle class="quick-water-meter-track" cx="60" cy="60" r="48" />
-                <circle id="quick-water-meter-progress" class="quick-water-meter-progress" cx="60" cy="60" r="48" />
+                <circle
+                  id="quick-water-meter-progress"
+                  class="quick-water-meter-progress"
+                  cx="60"
+                  cy="60"
+                  r="48"
+                />
               </svg>
               <span id="quick-water-meter-label" class="quick-water-meter-label">0%</span>
             </div>
@@ -190,7 +213,11 @@
               <span class="toolbar-label">Weekly insight</span>
               <h3 id="weekly-narrative-title">Your trend, in context</h3>
             </div>
-            <p id="weekly-insight-narrative" class="weekly-insight-narrative" aria-live="polite"></p>
+            <p
+              id="weekly-insight-narrative"
+              class="weekly-insight-narrative"
+              aria-live="polite"
+            ></p>
           </article>
 
           <article class="panel consistency-panel" aria-labelledby="consistency-title">
@@ -205,7 +232,12 @@
                 <span>current streak</span>
               </div>
             </div>
-            <div id="consistency-heatmap" class="consistency-heatmap" role="img" aria-label="No daily logs in the last 90 days."></div>
+            <div
+              id="consistency-heatmap"
+              class="consistency-heatmap"
+              role="img"
+              aria-label="No daily logs in the last 90 days."
+            ></div>
             <div class="consistency-legend" aria-hidden="true">
               <span>Less</span>
               <i class="heat-cell heat-cell--0"></i>
@@ -300,11 +332,24 @@
                 </label>
                 <label>
                   <span>Weight</span>
-                  <input type="number" id="daily-weight" name="weight" step="0.1" min="0" placeholder="72.4" />
+                  <input
+                    type="number"
+                    id="daily-weight"
+                    name="weight"
+                    step="0.1"
+                    min="0"
+                    placeholder="72.4"
+                  />
                 </label>
                 <label>
                   <span>Calories</span>
-                  <input type="number" id="daily-calories" name="calories" min="0" placeholder="2300" />
+                  <input
+                    type="number"
+                    id="daily-calories"
+                    name="calories"
+                    min="0"
+                    placeholder="2300"
+                  />
                 </label>
                 <label class="full-width">
                   <span>Macro Input</span>
@@ -315,15 +360,37 @@
                 </label>
                 <label>
                   <span id="daily-protein-label">Protein (%)</span>
-                  <input type="number" id="daily-protein" name="protein" min="0" placeholder="180" />
+                  <input
+                    type="number"
+                    id="daily-protein"
+                    name="protein"
+                    min="0"
+                    placeholder="180"
+                  />
                 </label>
                 <label>
                   <span id="daily-carbs-label">Carbs (%)</span>
-                  <input type="number" id="daily-carbs-percent" name="carbPercent" min="0" max="100" step="0.1" placeholder="40" />
+                  <input
+                    type="number"
+                    id="daily-carbs-percent"
+                    name="carbPercent"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="40"
+                  />
                 </label>
                 <label>
                   <span id="daily-fat-label">Fat (%)</span>
-                  <input type="number" id="daily-fat-percent" name="fatPercent" min="0" max="100" step="0.1" placeholder="30" />
+                  <input
+                    type="number"
+                    id="daily-fat-percent"
+                    name="fatPercent"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="30"
+                  />
                 </label>
 
                 <div id="macro-preview" class="macro-preview full-width"></div>
@@ -334,19 +401,47 @@
                 </label>
                 <label>
                   <span>Sleep (hours)</span>
-                  <input type="number" id="daily-sleep" name="sleep" min="0" step="0.1" placeholder="7.5" />
+                  <input
+                    type="number"
+                    id="daily-sleep"
+                    name="sleep"
+                    min="0"
+                    step="0.1"
+                    placeholder="7.5"
+                  />
                 </label>
                 <label>
                   <span>Water (glasses)</span>
-                  <input type="number" id="daily-water-glasses" name="waterGlasses" min="0" step="0.1" placeholder="8" />
+                  <input
+                    type="number"
+                    id="daily-water-glasses"
+                    name="waterGlasses"
+                    min="0"
+                    step="0.1"
+                    placeholder="8"
+                  />
                 </label>
                 <label>
                   <span>Water Target (glasses)</span>
-                  <input type="number" id="daily-water-target" name="waterTargetGlasses" min="0" step="0.1" placeholder="8" />
+                  <input
+                    type="number"
+                    id="daily-water-target"
+                    name="waterTargetGlasses"
+                    min="0"
+                    step="0.1"
+                    placeholder="8"
+                  />
                 </label>
                 <label>
                   <span>Glass Size (ml)</span>
-                  <input type="number" id="daily-water-unit" name="waterUnitAmountMl" min="0" step="1" placeholder="250" />
+                  <input
+                    type="number"
+                    id="daily-water-unit"
+                    name="waterUnitAmountMl"
+                    min="0"
+                    step="1"
+                    placeholder="250"
+                  />
                 </label>
                 <label>
                   <span>Energy (1-5)</span>
@@ -361,11 +456,19 @@
                 </label>
                 <label class="full-width">
                   <span>Notes</span>
-                  <textarea id="daily-notes" name="notes" rows="4" placeholder="Recovery notes, appetite, stress, training readiness..."></textarea>
+                  <textarea
+                    id="daily-notes"
+                    name="notes"
+                    rows="4"
+                    placeholder="Recovery notes, appetite, stress, training readiness..."
+                  ></textarea>
                 </label>
-
               </form>
-              <button type="submit" form="daily-log-form" class="primary-button full-width entry-submit-button">
+              <button
+                type="submit"
+                form="daily-log-form"
+                class="primary-button full-width entry-submit-button"
+              >
                 Save Daily Log
               </button>
             </article>
@@ -376,7 +479,12 @@
                   <h3>Workout Log</h3>
                   <p>Build a full session with multiple exercises and sets.</p>
                 </div>
-                <button type="button" id="repeat-last-workout-button" class="secondary-button" disabled>
+                <button
+                  type="button"
+                  id="repeat-last-workout-button"
+                  class="secondary-button"
+                  disabled
+                >
                   Repeat Last Session
                 </button>
               </div>
@@ -388,11 +496,24 @@
                 </label>
                 <label>
                   <span>Session Type</span>
-                  <input type="text" id="workout-session-type" name="session_type" placeholder="Upper Body" required />
+                  <input
+                    type="text"
+                    id="workout-session-type"
+                    name="session_type"
+                    placeholder="Upper Body"
+                    required
+                  />
                 </label>
                 <label>
                   <span>Duration (minutes)</span>
-                  <input type="number" id="workout-duration" name="duration" min="0" placeholder="75" required />
+                  <input
+                    type="number"
+                    id="workout-duration"
+                    name="duration"
+                    min="0"
+                    placeholder="75"
+                    required
+                  />
                 </label>
 
                 <div class="full-width nested-section">
@@ -401,12 +522,13 @@
                       <h4>Exercises</h4>
                       <p>Add exercises and set details for the session.</p>
                     </div>
-                    <button type="button" id="add-exercise-button" class="secondary-button">Add Exercise</button>
+                    <button type="button" id="add-exercise-button" class="secondary-button">
+                      Add Exercise
+                    </button>
                   </div>
                   <div id="exercise-list" class="exercise-list"></div>
                   <datalist id="exercise-name-options"></datalist>
                 </div>
-
               </form>
               <button
                 type="submit"
@@ -468,8 +590,8 @@
               <div class="importer">
                 <input type="file" id="csv-import" accept=".csv,text/csv" />
                 <p class="helper-text">
-                  Imported rows merge by date so existing steps, sleep, water,
-                  notes, and workout data stay intact.
+                  Imported rows merge by date so existing steps, sleep, water, notes, and workout
+                  data stay intact.
                 </p>
               </div>
             </article>
@@ -490,7 +612,8 @@
                   Export Full Backup
                 </button>
                 <p class="helper-text">
-                  Backup import merges daily logs by date, skips duplicate workouts, and restores saved targets.
+                  Backup import merges daily logs by date, skips duplicate workouts, and restores
+                  saved targets.
                 </p>
               </div>
             </article>
@@ -522,7 +645,12 @@
                   <tbody id="daily-history-body"></tbody>
                 </table>
               </div>
-              <button type="button" id="daily-history-load-more" class="secondary-button history-load-more" hidden>
+              <button
+                type="button"
+                id="daily-history-load-more"
+                class="secondary-button history-load-more"
+                hidden
+              >
                 Load More Daily Logs
               </button>
             </article>
@@ -547,7 +675,12 @@
                   <tbody id="workout-history-body"></tbody>
                 </table>
               </div>
-              <button type="button" id="workout-history-load-more" class="secondary-button history-load-more" hidden>
+              <button
+                type="button"
+                id="workout-history-load-more"
+                class="secondary-button history-load-more"
+                hidden
+              >
                 Load More Workouts
               </button>
             </article>
@@ -556,8 +689,8 @@
       </main>
 
       <footer class="site-footer" aria-label="Site footer">
-        <span class="site-footer-left">Copyright &copy; 2024</span>
-        <span class="site-footer-center">Version v2.4.0</span>
+        <span class="site-footer-left">Copyright &copy; 2024-2025</span>
+        <span class="site-footer-center">Version v2.5.0</span>
         <span class="site-footer-right">Health Ledger</span>
       </footer>
     </div>
@@ -583,8 +716,8 @@
           <span class="quote-label">Private Access</span>
           <h2 id="auth-title">Sign in to unlock your Health Ledger</h2>
           <p class="section-copy">
-            Your dashboard, daily logs, workouts, and settings are now stored in your own
-            Firebase account space and synced per user.
+            Your dashboard, daily logs, workouts, and settings are now stored in your own Firebase
+            account space and synced per user.
           </p>
         </div>
 
@@ -624,7 +757,13 @@
                   minlength="6"
                   required
                 />
-                <button type="button" id="password-visibility-button" class="password-visibility-button" aria-pressed="false" aria-label="Show password">
+                <button
+                  type="button"
+                  id="password-visibility-button"
+                  class="password-visibility-button"
+                  aria-pressed="false"
+                  aria-label="Show password"
+                >
                   Show
                 </button>
               </span>
@@ -648,9 +787,14 @@
 
           <div id="offline-preview-block" class="auth-preview-block" hidden>
             <p id="offline-preview-copy" class="helper-text auth-preview-copy">
-              Local file previews cannot complete Firebase sign-in reliably. You can still open the app in offline preview mode and store test data in this browser.
+              Local file previews cannot complete Firebase sign-in reliably. You can still open the
+              app in offline preview mode and store test data in this browser.
             </p>
-            <button type="button" id="offline-preview-button" class="secondary-button auth-preview-button">
+            <button
+              type="button"
+              id="offline-preview-button"
+              class="secondary-button auth-preview-button"
+            >
               Continue in Offline Preview
             </button>
           </div>
@@ -673,7 +817,12 @@
             <span class="quote-label">My Account</span>
             <h3 id="account-modal-title">Manage your profile</h3>
           </div>
-          <button type="button" id="account-modal-close" class="utility-close" aria-label="Close account panel">
+          <button
+            type="button"
+            id="account-modal-close"
+            class="utility-close"
+            aria-label="Close account panel"
+          >
             Close
           </button>
         </div>
@@ -712,7 +861,8 @@
           <div>
             <h4>Delete My Account</h4>
             <p class="helper-text">
-              Permanently removes your Health Ledger profile, daily logs, workouts, settings, and sign-in.
+              Permanently removes your Health Ledger profile, daily logs, workouts, settings, and
+              sign-in.
             </p>
           </div>
           <label>
@@ -767,19 +917,46 @@
           </label>
           <label>
             <span>Daily Protein Target (g)</span>
-            <input type="number" id="settings-protein-grams" name="proteinGramTarget" min="0" required />
+            <input
+              type="number"
+              id="settings-protein-grams"
+              name="proteinGramTarget"
+              min="0"
+              required
+            />
           </label>
           <label>
             <span>Protein % Target</span>
-            <input type="number" id="settings-macro-protein" name="proteinTarget" min="0" max="100" required />
+            <input
+              type="number"
+              id="settings-macro-protein"
+              name="proteinTarget"
+              min="0"
+              max="100"
+              required
+            />
           </label>
           <label>
             <span>Carbs % Target</span>
-            <input type="number" id="settings-macro-carbs" name="carbsTarget" min="0" max="100" required />
+            <input
+              type="number"
+              id="settings-macro-carbs"
+              name="carbsTarget"
+              min="0"
+              max="100"
+              required
+            />
           </label>
           <label>
             <span>Fat % Target</span>
-            <input type="number" id="settings-macro-fat" name="fatTarget" min="0" max="100" required />
+            <input
+              type="number"
+              id="settings-macro-fat"
+              name="fatTarget"
+              min="0"
+              max="100"
+              required
+            />
           </label>
           <div class="nested-section full-width preference-section">
             <div class="nested-header">
@@ -791,17 +968,33 @@
             <div class="preference-grid">
               <label>
                 <span>Glass Size (ml)</span>
-                <input type="number" id="settings-water-unit" name="waterUnitAmountMl" min="0" step="1" required />
+                <input
+                  type="number"
+                  id="settings-water-unit"
+                  name="waterUnitAmountMl"
+                  min="0"
+                  step="1"
+                  required
+                />
               </label>
               <label>
                 <span>Daily Goal</span>
-                <input type="number" id="settings-water-target" name="waterTargetGlasses" min="0" step="0.1" required />
+                <input
+                  type="number"
+                  id="settings-water-target"
+                  name="waterTargetGlasses"
+                  min="0"
+                  step="0.1"
+                  required
+                />
               </label>
             </div>
           </div>
 
           <div class="utility-actions full-width">
-            <button type="button" id="preferences-modal-cancel" class="secondary-button">Cancel</button>
+            <button type="button" id="preferences-modal-cancel" class="secondary-button">
+              Cancel
+            </button>
             <button type="submit" class="primary-button">Save Preferences</button>
           </div>
         </form>
@@ -859,8 +1052,12 @@
         <p id="confirmation-message" class="section-copy modal-copy"></p>
 
         <div class="utility-actions">
-          <button type="button" id="confirmation-cancel-button" class="secondary-button">Cancel</button>
-          <button type="button" id="confirmation-confirm-button" class="primary-button">Confirm</button>
+          <button type="button" id="confirmation-cancel-button" class="secondary-button">
+            Cancel
+          </button>
+          <button type="button" id="confirmation-confirm-button" class="primary-button">
+            Confirm
+          </button>
         </div>
       </div>
     </div>

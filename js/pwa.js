@@ -17,6 +17,6 @@ export function registerServiceWorker() {
         // when a static host deliberately disables service workers.
       });
     },
-    { once: true }
+    { once: true },
   );
 }

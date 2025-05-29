@@ -26,7 +26,7 @@ import {
 const firebaseApp = isFirebaseConfigured() ? initializeApp(firebaseConfig) : null;
 
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
-export const db   = initializeDatabase(firebaseApp);
+export const db = initializeDatabase(firebaseApp);
 
 export const googleProvider = firebaseApp ? new GoogleAuthProvider() : null;
 
@@ -59,7 +59,7 @@ function initializeDatabase(app) {
 export function assertFirebaseConfigured() {
   if (!firebaseApp || !auth || !db || !googleProvider) {
     throw new Error(
-      "Firebase is not configured yet. Add your Firebase web app values in js/config.js before using cloud sign-in and sync."
+      "Firebase is not configured yet. Add your Firebase web app values in js/config.js before using cloud sign-in and sync.",
     );
   }
 }

@@ -13,10 +13,7 @@ import {
 } from "../js/utils.js";
 
 test("macro math keeps grams and calories internally consistent", () => {
-  assert.equal(
-    calculateMacroCaloriesFromGrams({ protein: 180, carbs: 250, fat: 70 }),
-    2350
-  );
+  assert.equal(calculateMacroCaloriesFromGrams({ protein: 180, carbs: 250, fat: 70 }), 2350);
 
   const payload = buildMacroPayloadFromInputs(null, 180, 250, 70, "grams");
   assert.deepEqual(payload.macros, { protein: 180, carbs: 250, fat: 70 });
@@ -83,7 +80,7 @@ test("CSV parsing handles quotes and produces normalized macro fields", () => {
   ]);
 
   const [log] = parseLegacyCsv(
-    "Date,Weight,Calories,Protein,Carbs,Fat\n2026-07-19,72.4,2350,180,250,70"
+    "Date,Weight,Calories,Protein,Carbs,Fat\n2026-07-19,72.4,2350,180,250,70",
   );
   assert.deepEqual(log.macros, { protein: 180, carbs: 250, fat: 70 });
   assert.deepEqual(log.macroPercentages, { protein: 30.6, carbs: 42.6, fat: 26.8 });
@@ -91,10 +88,11 @@ test("CSV parsing handles quotes and produces normalized macro fields", () => {
 
 test("backup validation rejects an impossible date before state normalization", () => {
   assert.throws(
-    () => normalizeBackupPayload({
-      version: 4,
-      dailyLogs: [{ date: "2024-02-31" }],
-    }),
-    /missing a valid YYYY-MM-DD date/
+    () =>
+      normalizeBackupPayload({
+        version: 4,
+        dailyLogs: [{ date: "2024-02-31" }],
+      }),
+    /missing a valid YYYY-MM-DD date/,
   );
 });
