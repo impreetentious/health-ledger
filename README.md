@@ -36,7 +36,6 @@ Requires Node 20.10+ only if you want to run the tests; the app itself needs not
 
 2. Set your deploy-time configuration. Recommended — use the gitignored local
    override so real values never land in a git-tracked file:
-
    - copy the template: `cp js/runtime-config.local.example.js js/runtime-config.local.js`
    - edit [`js/runtime-config.local.js`](js/runtime-config.local.js) and fill in your real values
 
@@ -185,4 +184,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.5.1
+**Version:** v2.5.2

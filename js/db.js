@@ -43,6 +43,7 @@ import {
   getWorkoutSignature,
   sortByDateAsc,
 } from "./utils.js";
+
 import { OFFLINE_PREVIEW_STORAGE_KEY, LOCAL_WORKSPACE_SCHEMA_VERSION } from "./config.js";
 
 // Keep comfortably below Firestore's 500-operation transaction/batch limit.
@@ -553,7 +554,8 @@ async function importWorkoutLogs(workouts) {
       const batch = writeBatch(db);
       const savedWorkouts = chunk.map((workout) => {
         const docRef = doc(getUserWorkoutLogsCollection(user.uid));
-        const { id, ...payload } = workout;
+        const payload = { ...workout };
+        delete payload.id;
         batch.set(docRef, clonePlainData(payload));
         return { ...workout, id: docRef.id };
       });
