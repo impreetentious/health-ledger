@@ -19,9 +19,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      # The app and its suite pull in no runtime dependencies — `npm test` ==
-      # `node --test` (discovers test/**/*.test.js) on the built-in runner.
-      # Prettier is the only devDependency.
+      # The app pulls in no runtime dependencies; browser checks use dev-only Playwright.
       - run: npm ci
+      - run: npm run check:version
       - run: npm run format:check
+      - run: npm run lint
       - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

@@ -12,3 +12,8 @@ node_modules/
 
 # Local runtime config override — real Firebase/EmailJS values, never committed.
 js/runtime-config.local.js
+
+# Playwright output from `npm run test:e2e`.
+/test-results
+/playwright-report
+/playwright/.cache
