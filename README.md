@@ -20,7 +20,7 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 
 ## Local Setup
 
-Requires Node 20.10+ only if you want to run the tests; the app itself needs nothing but a web server.
+Requires Node `>=20.10` only if you want to run the tests; the app itself needs nothing but a web server. `.nvmrc` pins `20.20.0`, and `engine-strict` makes `npm ci` fail outright on a version outside the declared range rather than warning.
 
 1. Serve the repository over HTTP. ES modules will not load from `file://`, so open it through a server:
 
@@ -184,4 +184,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.6.0
+**Version:** v2.7.0

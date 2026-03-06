@@ -13,14 +13,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Set up Node (pinned via .nvmrc)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
       # The app pulls in no runtime dependencies; browser checks use dev-only Playwright.
       - run: npm ci
+      # Scoped to production dependencies: the shipped app must stay advisory-free,
+      # while dev-only tooling advisories do not block. This step consults the live
+      # advisory database, so it can turn red without any commit changing — that is
+      # intended, and the fix is a dependency bump, not a revert.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run check:version
       - run: npm run format:check
       - run: npm run lint
