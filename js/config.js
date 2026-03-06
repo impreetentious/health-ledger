@@ -34,8 +34,23 @@ export const LOCAL_WORKSPACE_SCHEMA_VERSION = 2;
 export const BACKUP_SCHEMA_VERSION = 4;
 // Health records are sensitive. Persistent Firestore cache is intentionally an
 // explicit deploy-time opt-in for a trusted personal device, never a default.
-export const FIRESTORE_OFFLINE_PERSISTENCE_ENABLED =
-  runtimeConfig.firestore?.enableOfflinePersistence === true;
+export function resolveOfflinePersistence(config) {
+  return (
+    config.firebase?.enableOfflinePersistence === true ||
+    config.firestore?.enableOfflinePersistence === true
+  );
+}
+
+export function warnOnLegacyOfflinePersistence(config, warn = console.warn) {
+  if (config.firestore?.enableOfflinePersistence !== undefined) {
+    warn(
+      "HEALTH_LEDGER_CONFIG.firestore.enableOfflinePersistence is deprecated; use firebase.enableOfflinePersistence.",
+    );
+  }
+}
+
+warnOnLegacyOfflinePersistence(runtimeConfig);
+export const FIRESTORE_OFFLINE_PERSISTENCE_ENABLED = resolveOfflinePersistence(runtimeConfig);
 export const EMAILJS_PUBLIC_KEY = resolveConfigValue(
   runtimeConfig.emailjs?.publicKey,
   "REPLACE_WITH_EMAILJS_PUBLIC_KEY",

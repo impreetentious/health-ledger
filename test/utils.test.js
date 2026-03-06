@@ -11,6 +11,24 @@ import {
   parseLegacyCsv,
   splitCsvRow,
 } from "../js/utils.js";
+import { resolveOfflinePersistence, warnOnLegacyOfflinePersistence } from "../js/config.js";
+
+test("offline persistence uses the Firebase namespace and warns on the legacy namespace", () => {
+  assert.equal(resolveOfflinePersistence({ firebase: { enableOfflinePersistence: true } }), true);
+  assert.equal(resolveOfflinePersistence({ firebase: { enableOfflinePersistence: false } }), false);
+  assert.equal(
+    resolveOfflinePersistence({ firebase: { enableOfflinePersistence: "true" } }),
+    false,
+  );
+  assert.equal(resolveOfflinePersistence({}), false);
+
+  const warnings = [];
+  warnOnLegacyOfflinePersistence({ firestore: { enableOfflinePersistence: true } }, (message) =>
+    warnings.push(message),
+  );
+  assert.equal(resolveOfflinePersistence({ firestore: { enableOfflinePersistence: true } }), true);
+  assert.match(warnings[0], /use firebase\.enableOfflinePersistence/);
+});
 
 test("macro math keeps grams and calories internally consistent", () => {
   assert.equal(calculateMacroCaloriesFromGrams({ protein: 180, carbs: 250, fat: 70 }), 2350);

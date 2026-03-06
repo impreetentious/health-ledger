@@ -1,6 +1,6 @@
 {
   "name": "health-ledger",
-  "version": "2.5.3",
+  "version": "2.6.0",
   "description": "A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode.",
   "private": true,
   "type": "module",
@@ -21,11 +21,11 @@
     "check:version": "node scripts/check-version-coherence.mjs"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.0",
-    "@eslint/js": "^9.39.1",
-    "@playwright/test": "^1.57.0",
-    "eslint": "^9.39.1",
+    "@axe-core/playwright": "^4.11.1",
+    "@eslint/js": "^9.39.3",
+    "@playwright/test": "^1.58.2",
+    "eslint": "^9.39.3",
     "globals": "^16.5.0",
-    "prettier": "^3.7.4"
+    "prettier": "^3.8.1"
   }
 }
