@@ -34,7 +34,11 @@ const SHELL_ASSETS = [
 ];
 const OPTIONAL_SHELL_ASSETS = ["./js/runtime-config.local.js"];
 
-const STATIC_RUNTIME_ORIGINS = new Set(["https://www.gstatic.com", "https://cdn.jsdelivr.net"]);
+const STATIC_RUNTIME_PREFIXES = [
+  "https://www.gstatic.com/firebasejs/12.9.0/",
+  "https://cdn.jsdelivr.net/npm/chart.js@4.5.1/",
+  "https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/",
+];
 
 // Do not use a broad same-origin rule here: a host can add endpoints later,
 // and health records or backup responses must never enter Cache Storage.
@@ -88,7 +92,9 @@ self.addEventListener("fetch", (event) => {
   const isSameOrigin = url.origin === self.location.origin;
   const isShellAsset = isSameOrigin && !url.search && SHELL_PATHS.has(url.pathname);
   const isConfigAsset = isSameOrigin && !url.search && CONFIG_PATHS.has(url.pathname);
-  const isKnownStaticRuntime = STATIC_RUNTIME_ORIGINS.has(url.origin);
+  const isKnownStaticRuntime = STATIC_RUNTIME_PREFIXES.some((prefix) =>
+    url.href.startsWith(prefix),
+  );
 
   // Deploy-time config can change independently of the application shell.
   // Refresh it online, but retain the last successful copy for an offline boot.

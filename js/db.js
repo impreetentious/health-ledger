@@ -17,7 +17,7 @@ import {
   getDocs,
   setDoc,
   writeBatch,
-} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 import { db, assertFirebaseConfigured } from "./firebase.js";
 import {

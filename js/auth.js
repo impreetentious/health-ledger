@@ -25,7 +25,7 @@ import {
   signInWithPopup,
   signOut,
   updateProfile,
-} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
 
 import { auth, googleProvider, assertFirebaseConfigured } from "./firebase.js";
 import { getFriendlyUserName } from "./utils.js";
@@ -219,7 +219,7 @@ export async function sendGoodbyeEmail(user) {
 async function sendEmailJsTemplate(templateId, templateParams) {
   if (!isEmailJsConfigured()) {
     throw new Error(
-      "EmailJS is not configured yet. Add your EmailJS public key, service ID, and template IDs in js/config.js.",
+      "EmailJS is not configured yet. Add its public key, service ID, and template IDs to the runtime configuration.",
     );
   }
 

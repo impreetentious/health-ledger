@@ -5,17 +5,17 @@
   here. The Firebase app is only initialised once.
 */
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import {
   getAuth,
   GoogleAuthProvider,
-} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
 import {
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
-} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 import {
   firebaseConfig,
@@ -59,7 +59,7 @@ function initializeDatabase(app) {
 export function assertFirebaseConfigured() {
   if (!firebaseApp || !auth || !db || !googleProvider) {
     throw new Error(
-      "Firebase is not configured yet. Add your Firebase web app values in js/config.js before using cloud sign-in and sync.",
+      "Firebase is not configured yet. Add your Firebase web app values to the runtime configuration before using cloud sign-in and sync.",
     );
   }
 }

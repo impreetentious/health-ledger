@@ -51,25 +51,30 @@ window.Chart = class {
 `;
 
 async function stubExternalAssets(page) {
+  await page.addInitScript({
+    content: chartStub + "\nwindow.emailjs = { init() {}, send: async () => ({}) };",
+  });
   await page.route("**/js/runtime-config.local.js*", (route) =>
     route.fulfill({ contentType: "text/javascript", body: "" }),
   );
   await page.route("https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: chartStub }),
   );
-  await page.route("https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js", (route) =>
-    route.fulfill({
-      contentType: "text/javascript",
-      body: "window.emailjs = { init() {}, send: async () => ({}) };",
-    }),
+  await page.route(
+    "https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/dist/email.min.js",
+    (route) =>
+      route.fulfill({
+        contentType: "text/javascript",
+        body: "window.emailjs = { init() {}, send: async () => ({}) };",
+      }),
   );
-  await page.route("https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js", (route) =>
+  await page.route("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: firebaseAppStub }),
   );
-  await page.route("https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js", (route) =>
+  await page.route("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: firebaseAuthStub }),
   );
-  await page.route("https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js", (route) =>
+  await page.route("https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: firestoreStub }),
   );
 }
