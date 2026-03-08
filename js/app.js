@@ -1,7 +1,7 @@
 "use strict";
 
 /*
-  Health Ledger — app.js (entry point)
+  Health Ledger — app.js (application module)
   ---------------------------------------------------------------------------
   This is the only module that binds DOM events and reacts to Firebase
   auth-state changes. Every other module is a dependency of this one; no
@@ -133,7 +133,11 @@ import {
   ---------------------------------------------------------------------------
 */
 
-document.addEventListener("DOMContentLoaded", initializeInterface);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeInterface, { once: true });
+} else {
+  initializeInterface();
+}
 
 function initializeInterface() {
   cacheDomReferences();
@@ -149,7 +153,7 @@ function initializeInterface() {
   renderSignedOutState();
   if (!isFirebaseConfigured()) {
     setAuthFeedback(
-      "Cloud sign-in is not configured in this public copy yet. Add your Firebase web app values in js/config.js, or use offline preview for local testing.",
+      "Cloud sign-in is not configured. Add your Firebase web app values to the runtime configuration, or use offline preview.",
       "error",
     );
   }
@@ -340,7 +344,7 @@ async function handleAuthStateChange(user) {
 async function handleGoogleSignIn() {
   if (shouldOfferOfflinePreview()) {
     setAuthFeedback(
-      "This local preview cannot reliably complete Firebase sign-in. Use a local server or continue in offline preview mode.",
+      "Firebase sign-in is unavailable from a local file or while offline. Serve the app and reconnect, or continue in offline preview mode.",
       "error",
     );
     return;
@@ -410,7 +414,7 @@ async function handleEmailSignUp() {
 async function submitEmailAuth(mode) {
   if (shouldOfferOfflinePreview()) {
     setAuthFeedback(
-      "Email sign-in needs a served web app. Use a local server or continue in offline preview mode here.",
+      "Email sign-in is unavailable from a local file or while offline. Serve the app and reconnect, or continue in offline preview mode.",
       "error",
     );
     return;
@@ -541,7 +545,7 @@ async function sendWelcomeEmailBestEffort(user) {
   } catch (error) {
     console.error(error);
     showStatusMessage(
-      "Your account is ready, but the welcome email could not be sent. Check EmailJS setup in js/config.js.",
+      "Your account is ready, but the welcome email could not be sent. Check the EmailJS runtime configuration.",
       true,
     );
   }
@@ -936,7 +940,7 @@ async function handleAccountDelete() {
       } catch (emailError) {
         console.error(emailError);
         showStatusMessage(
-          "Account deletion will continue, but the goodbye email could not be sent. Check EmailJS setup in js/config.js.",
+          "Account deletion will continue, but the goodbye email could not be sent. Check the EmailJS runtime configuration.",
           true,
         );
       }

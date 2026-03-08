@@ -1,1 +1,1 @@
-globalThis.HEALTH_LEDGER_CONFIG = globalThis.HEALTH_LEDGER_CONFIG || {};
+globalThis.HEALTH_LEDGER_CONFIG ||= {};

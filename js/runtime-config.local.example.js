@@ -12,7 +12,7 @@
   unfilled copy leaves the app in its safe offline-preview state instead of
   trying to initialize Firebase with junk.
 */
-globalThis.HEALTH_LEDGER_CONFIG = globalThis.HEALTH_LEDGER_CONFIG || {};
+globalThis.HEALTH_LEDGER_CONFIG ||= {};
 
 globalThis.HEALTH_LEDGER_CONFIG.firebase = {
   apiKey: "REPLACE_WITH_FIREBASE_API_KEY",

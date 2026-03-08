@@ -20,7 +20,7 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 
 ## Local Setup
 
-Requires Node `>=20.10` only if you want to run the tests; the app itself needs nothing but a web server. `.nvmrc` pins `20.20.0`, and `engine-strict` makes `npm ci` fail outright on a version outside the declared range rather than warning.
+The app itself needs only a web server. Repository checks use Node `20.20.0` and npm `10.8.2`; `.nvmrc` records the Node version, while `engine-strict` rejects Node versions outside the supported `>=20.10` range during installation.
 
 1. Serve the repository over HTTP. ES modules will not load from `file://`, so open it through a server:
 
@@ -34,10 +34,11 @@ Requires Node `>=20.10` only if you want to run the tests; the app itself needs 
    npx serve .
    ```
 
-2. Set your deploy-time configuration. Recommended — use the gitignored local
-   override so real values never land in a git-tracked file:
+2. Set your deploy-time configuration. The recommended local workflow uses the gitignored override
+   so deployment values do not land in a tracked file:
    - copy the template: `cp js/runtime-config.local.example.js js/runtime-config.local.js`
-   - edit [`js/runtime-config.local.js`](js/runtime-config.local.js) and fill in your real values
+   - edit `js/runtime-config.local.js`, using
+     [`js/runtime-config.local.example.js`](js/runtime-config.local.example.js) as the reference
 
    Alternatively, edit the git-tracked [`js/runtime-config.js`](js/runtime-config.js) or the
    placeholders in [`js/config.js`](js/config.js) directly — but avoid committing real values if you do.
@@ -132,6 +133,7 @@ health-ledger/
 ├── js/
 │   ├── app.js
 │   ├── auth.js
+│   ├── bootstrap.js
 │   ├── charts.js
 │   ├── config.js
 │   ├── dashboard.js
@@ -158,7 +160,7 @@ health-ledger/
 
 ## Module conventions
 
-- `index.html` loads Chart.js, EmailJS, and runtime configuration before its `js/app.js` entry module
+- `index.html` loads Chart.js, EmailJS, and `js/bootstrap.js`; the bootstrap loads optional runtime configuration before the application module
 - `js/app.js` orchestrates the app and binds events — it is the only module that coordinates across subsystems
 - `js/config.js` owns deploy-time configuration and shared constants
 - `js/firebase.js` owns Firebase initialization
@@ -184,4 +186,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.8.0
+**Version:** v2.8.1

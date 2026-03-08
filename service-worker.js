@@ -7,7 +7,7 @@
   workspace remains the only persisted personal data in this static build.
 */
 
-const SHELL_CACHE = "health-ledger-shell-v4";
+const SHELL_CACHE = "health-ledger-shell-v5";
 const SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -16,6 +16,7 @@ const SHELL_ASSETS = [
   "./css/style.css",
   "./fonts/InterVariable.woff2",
   "./js/runtime-config.js",
+  "./js/bootstrap.js",
   "./js/app.js",
   "./js/auth.js",
   "./js/charts.js",
@@ -31,21 +32,40 @@ const SHELL_ASSETS = [
   "./js/ui.js",
   "./js/utils.js",
 ];
+const OPTIONAL_SHELL_ASSETS = ["./js/runtime-config.local.js"];
 
 const STATIC_RUNTIME_ORIGINS = new Set(["https://www.gstatic.com", "https://cdn.jsdelivr.net"]);
 
 // Do not use a broad same-origin rule here: a host can add endpoints later,
 // and health records or backup responses must never enter Cache Storage.
 const SHELL_PATHS = new Set(
-  SHELL_ASSETS.map((asset) => new URL(asset, self.registration.scope).pathname),
+  [...SHELL_ASSETS, ...OPTIONAL_SHELL_ASSETS].map(
+    (asset) => new URL(asset, self.registration.scope).pathname,
+  ),
+);
+const CONFIG_PATHS = new Set(
+  ["./js/runtime-config.js", ...OPTIONAL_SHELL_ASSETS].map(
+    (asset) => new URL(asset, self.registration.scope).pathname,
+  ),
 );
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      .then((cache) => cache.addAll(SHELL_ASSETS))
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      await cache.addAll(SHELL_ASSETS);
+      await Promise.all(
+        OPTIONAL_SHELL_ASSETS.map(async (asset) => {
+          try {
+            const response = await fetch(asset, { cache: "no-store" });
+            if (response.ok) await cache.put(asset, response);
+          } catch {
+            // The local override is optional; the tracked runtime config is enough to boot.
+          }
+        }),
+      );
+      await self.skipWaiting();
+    })(),
   );
 });
 
@@ -67,7 +87,15 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   const isSameOrigin = url.origin === self.location.origin;
   const isShellAsset = isSameOrigin && !url.search && SHELL_PATHS.has(url.pathname);
+  const isConfigAsset = isSameOrigin && !url.search && CONFIG_PATHS.has(url.pathname);
   const isKnownStaticRuntime = STATIC_RUNTIME_ORIGINS.has(url.origin);
+
+  // Deploy-time config can change independently of the application shell.
+  // Refresh it online, but retain the last successful copy for an offline boot.
+  if (isConfigAsset) {
+    event.respondWith(networkFirstWithCacheFallback(request));
+    return;
+  }
 
   if (request.mode === "navigate" && isSameOrigin) {
     event.respondWith(isShellAsset ? cacheFirst(request) : navigateWithShellFallback(request));
@@ -95,6 +123,24 @@ async function cacheFirst(request) {
       const fallback = await caches.match("./index.html");
       if (fallback) return fallback;
     }
+    throw error;
+  }
+}
+
+async function networkFirstWithCacheFallback(request) {
+  const cache = await caches.open(SHELL_CACHE);
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      await cache.put(request, response.clone());
+    } else if (response.status === 404) {
+      await cache.delete(request);
+    }
+    return response;
+  } catch (error) {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) return cachedResponse;
     throw error;
   }
 }
