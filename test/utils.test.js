@@ -8,6 +8,8 @@ import {
   isValidIsoDateString,
   mergeDailyLogs,
   normalizeBackupPayload,
+  normalizeDailyLog,
+  normalizeUserSettings,
   parseLegacyCsv,
   splitCsvRow,
 } from "../js/utils.js";
@@ -71,6 +73,36 @@ test("daily merge preserves omitted values while retaining explicit zero", () =>
   assert.equal(merged.notes, "Recovery day");
 });
 
+test("daily normalization preserves water fields from the legacy flat schema", () => {
+  const normalized = normalizeDailyLog({
+    date: "2026-07-19",
+    waterGlasses: 7,
+    waterTargetGlasses: 9,
+    waterUnitAmountMl: 300,
+  });
+
+  assert.deepEqual(normalized.water, {
+    glasses: 7,
+    targetGlasses: 9,
+    unitAmountMl: 300,
+  });
+});
+
+test("settings normalization rejects invalid imported targets", () => {
+  const normalized = normalizeUserSettings({
+    calorieTarget: -1,
+    proteinGramTarget: 160,
+    macroTarget: { protein: 80, carbs: 80, fat: -60 },
+    waterTargetGlasses: 8,
+    waterUnitAmountMl: -250,
+  });
+
+  assert.equal(normalized.calorieTarget, 2300);
+  assert.equal(normalized.proteinGramTarget, 160);
+  assert.deepEqual(normalized.macroTarget, { protein: 30, carbs: 40, fat: 30 });
+  assert.equal(normalized.waterUnitAmountMl, 250);
+});
+
 test("date and week helpers reject impossible dates and handle ISO-year boundaries", () => {
   assert.equal(isValidIsoDateString("2026-02-29"), false);
   assert.equal(isValidIsoDateString("2024-02-29"), true);
@@ -113,4 +145,13 @@ test("backup validation rejects an impossible date before state normalization", 
       }),
     /missing a valid YYYY-MM-DD date/,
   );
+});
+
+test("backup validation rejects malformed schema versions", () => {
+  for (const version of [0, -1, 1.5, "not-a-version"]) {
+    assert.throws(
+      () => normalizeBackupPayload({ version, dailyLogs: [] }),
+      /schema version must be a positive integer/,
+    );
+  }
 });

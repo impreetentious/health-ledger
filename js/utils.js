@@ -24,7 +24,7 @@ import { DEFAULT_SETTINGS, MACRO_CALORIE_MARGIN, BACKUP_SCHEMA_VERSION } from ".
  * with its time component fixed at noon local time. Using noon avoids all
  * DST-boundary edge cases when doing arithmetic that crosses midnight.
  */
-export function toDateAtNoon(dateInput) {
+function toDateAtNoon(dateInput) {
   if (dateInput instanceof Date) {
     const clone = new Date(dateInput);
     clone.setHours(12, 0, 0, 0);
@@ -70,7 +70,7 @@ export function isValidIsoDateString(value) {
  * Accepts already-normalised strings and anything Date can parse.
  * Returns null if the value is empty, unparseable, or not a real calendar date.
  */
-export function normalizeCsvDate(value) {
+function normalizeCsvDate(value) {
   if (!value) return null;
   const trimmed = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
@@ -99,7 +99,7 @@ export function formatShortDateLabel(dateInput) {
 }
 
 /** Returns the ISO week number and year for any date. */
-export function getIsoWeekInfo(dateInput) {
+function getIsoWeekInfo(dateInput) {
   const date = toDateAtNoon(dateInput);
   const thursday = new Date(date);
   thursday.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
@@ -370,7 +370,16 @@ export function mergeDailyLogs(baseLog, incomingLog) {
  * they were not stored directly.
  */
 export function normalizeDailyLog(log) {
-  const normalized = mergeDailyLogs(createEmptyDailyLog(log.date || getLocalDateString()), log);
+  const source = log && typeof log === "object" && !Array.isArray(log) ? log : {};
+  const date = source.date || getLocalDateString();
+  const normalized = mergeDailyLogs(createEmptyDailyLog(date), {
+    ...source,
+    water: {
+      glasses: source.water?.glasses ?? source.waterGlasses,
+      targetGlasses: source.water?.targetGlasses ?? source.waterTargetGlasses,
+      unitAmountMl: source.water?.unitAmountMl ?? source.waterUnitAmountMl,
+    },
+  });
   const derivedPercentages = deriveMacroPercentages(normalized.calories, normalized.macros);
   normalized.macroPercentages = {
     protein: normalized.macroPercentages.protein ?? derivedPercentages.protein,
@@ -381,7 +390,7 @@ export function normalizeDailyLog(log) {
 }
 
 /** Sanitises a raw exercise object from Firestore or the form. */
-export function normalizeExercise(exercise) {
+function normalizeExercise(exercise) {
   if (!exercise) return null;
   const sets = Array.isArray(exercise.sets)
     ? exercise.sets
@@ -392,42 +401,61 @@ export function normalizeExercise(exercise) {
         .filter((set) => set.reps !== null || set.weight !== null)
     : [];
   return {
-    name: (exercise.name || "").trim(),
-    muscle_group: (exercise.muscle_group || "").trim(),
+    name: typeof exercise.name === "string" ? exercise.name.trim() : "",
+    muscle_group: typeof exercise.muscle_group === "string" ? exercise.muscle_group.trim() : "",
     sets,
   };
 }
 
 /** Ensures a raw workout log has every expected field. */
 export function normalizeWorkoutLog(log) {
+  const source = log && typeof log === "object" && !Array.isArray(log) ? log : {};
   return {
-    id: log.id || "",
-    date: log.date || getLocalDateString(),
-    session_type: (log.session_type || "").trim(),
-    duration: toNumberOrNull(log.duration),
-    exercises: Array.isArray(log.exercises)
-      ? log.exercises.map(normalizeExercise).filter(Boolean)
+    id: typeof source.id === "string" ? source.id : "",
+    date: source.date || getLocalDateString(),
+    session_type: typeof source.session_type === "string" ? source.session_type.trim() : "",
+    duration: toNumberOrNull(source.duration),
+    exercises: Array.isArray(source.exercises)
+      ? source.exercises.map(normalizeExercise).filter(Boolean)
       : [],
   };
 }
 
 /** Applies DEFAULT_SETTINGS fallbacks to any partial settings object. */
 export function normalizeUserSettings(settings) {
-  return {
-    calorieTarget: toNumberOrNull(settings?.calorieTarget) ?? DEFAULT_SETTINGS.calorieTarget,
-    proteinGramTarget:
-      toNumberOrNull(settings?.proteinGramTarget) ?? DEFAULT_SETTINGS.proteinGramTarget,
-    macroTarget: {
-      protein:
-        toNumberOrNull(settings?.macroTarget?.protein) ?? DEFAULT_SETTINGS.macroTarget.protein,
-      carbs: toNumberOrNull(settings?.macroTarget?.carbs) ?? DEFAULT_SETTINGS.macroTarget.carbs,
-      fat: toNumberOrNull(settings?.macroTarget?.fat) ?? DEFAULT_SETTINGS.macroTarget.fat,
-    },
-    waterTargetGlasses:
-      toNumberOrNull(settings?.waterTargetGlasses) ?? DEFAULT_SETTINGS.waterTargetGlasses,
-    waterUnitAmountMl:
-      toNumberOrNull(settings?.waterUnitAmountMl) ?? DEFAULT_SETTINGS.waterUnitAmountMl,
+  const macroTarget = {
+    protein: toNumberOrNull(settings?.macroTarget?.protein),
+    carbs: toNumberOrNull(settings?.macroTarget?.carbs),
+    fat: toNumberOrNull(settings?.macroTarget?.fat),
   };
+  const hasValidMacroTarget =
+    Object.values(macroTarget).every((value) => isNumber(value) && value >= 0 && value <= 100) &&
+    Math.abs(macroTarget.protein + macroTarget.carbs + macroTarget.fat - 100) <= 0.01;
+
+  return {
+    calorieTarget: resolveNonNegativeSetting(
+      settings?.calorieTarget,
+      DEFAULT_SETTINGS.calorieTarget,
+    ),
+    proteinGramTarget: resolveNonNegativeSetting(
+      settings?.proteinGramTarget,
+      DEFAULT_SETTINGS.proteinGramTarget,
+    ),
+    macroTarget: hasValidMacroTarget ? macroTarget : clonePlainData(DEFAULT_SETTINGS.macroTarget),
+    waterTargetGlasses: resolveNonNegativeSetting(
+      settings?.waterTargetGlasses,
+      DEFAULT_SETTINGS.waterTargetGlasses,
+    ),
+    waterUnitAmountMl: resolveNonNegativeSetting(
+      settings?.waterUnitAmountMl,
+      DEFAULT_SETTINGS.waterUnitAmountMl,
+    ),
+  };
+}
+
+function resolveNonNegativeSetting(value, fallback) {
+  const normalized = toNumberOrNull(value);
+  return isNumber(normalized) && normalized >= 0 ? normalized : fallback;
 }
 
 /** Converts an array of daily logs to a date-keyed object for O(1) lookup. */
@@ -466,15 +494,22 @@ export function getWorkoutSignature(log) {
 
 /** Normalizes a workspace-like payload into the app's in-memory shape. */
 export function normalizeWorkspacePayload(payload = {}) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const hasValidDate = (log) =>
+    log && typeof log === "object" && !Array.isArray(log) && isValidIsoDateString(log.date);
+
   return {
-    userSettings: normalizeUserSettings(payload.userSettings || {}),
-    dailyLogs: Array.isArray(payload.dailyLogs)
-      ? payload.dailyLogs.map((log) => normalizeDailyLog(log)).sort(sortByDateAsc)
+    userSettings: normalizeUserSettings(source.userSettings || {}),
+    dailyLogs: Array.isArray(source.dailyLogs)
+      ? source.dailyLogs.filter(hasValidDate).map(normalizeDailyLog).sort(sortByDateAsc)
       : [],
-    workoutLogs: Array.isArray(payload.workoutLogs)
-      ? payload.workoutLogs.map((log) => normalizeWorkoutLog(log)).sort(sortByDateAsc)
+    workoutLogs: Array.isArray(source.workoutLogs)
+      ? source.workoutLogs.filter(hasValidDate).map(normalizeWorkoutLog).sort(sortByDateAsc)
       : [],
-    profile: payload.profile || {},
+    profile:
+      source.profile && typeof source.profile === "object" && !Array.isArray(source.profile)
+        ? source.profile
+        : {},
   };
 }
 
@@ -489,11 +524,15 @@ export function normalizeBackupPayload(payload = {}) {
     throw new Error("That file is not a Health Ledger backup. Expected a JSON backup object.");
   }
 
-  const version = toNumberOrNull(payload.version ?? payload.schemaVersion) ?? 1;
+  const version = toNumberOrNull(payload.version ?? payload.schemaVersion ?? 1);
+
+  if (!Number.isInteger(version) || version < 1) {
+    throw new Error("Invalid backup: the schema version must be a positive integer.");
+  }
 
   if (version > BACKUP_SCHEMA_VERSION) {
     throw new Error(
-      `This backup was created by a newer Health Ledger version (v${version}). Update the app before importing it.`,
+      `This backup uses a newer schema (v${version}). Update Health Ledger before importing it.`,
     );
   }
 

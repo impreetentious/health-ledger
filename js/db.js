@@ -89,7 +89,7 @@ function getUserWorkoutLogDoc(uid, logId) {
  * Callers (handleAuthStateChange in app.js) are responsible for triggering
  * any UI refresh after this resolves.
  */
-export async function hydrateUserWorkspace(uid) {
+export async function hydrateUserWorkspace(uid, { shouldApply = () => true } = {}) {
   assertFirebaseConfigured();
   const [settingsSnapshot, dailyLogsSnapshot, workoutLogsSnapshot] = await Promise.all([
     getDoc(getUserSettingsDoc(uid)),
@@ -106,15 +106,20 @@ export async function hydrateUserWorkspace(uid) {
     await setDoc(getUserSettingsDoc(uid), clonePlainData(settings), { merge: true });
   }
 
+  const dailyLogs = dailyLogsSnapshot.docs
+    .map((snapshot) => normalizeDailyLog({ ...snapshot.data(), date: snapshot.id }))
+    .sort(sortByDateAsc);
+
+  const workoutLogs = workoutLogsSnapshot.docs
+    .map((snapshot) => normalizeWorkoutLog({ ...snapshot.data(), id: snapshot.id }))
+    .sort(sortByDateAsc);
+
+  if (!shouldApply()) return false;
+
   appState.userSettings = settings;
-
-  appState.dailyLogs = dailyLogsSnapshot.docs
-    .map((snapshot) => normalizeDailyLog({ id: snapshot.id, ...snapshot.data() }))
-    .sort(sortByDateAsc);
-
-  appState.workoutLogs = workoutLogsSnapshot.docs
-    .map((snapshot) => normalizeWorkoutLog({ id: snapshot.id, ...snapshot.data() }))
-    .sort(sortByDateAsc);
+  appState.dailyLogs = dailyLogs;
+  appState.workoutLogs = workoutLogs;
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,7 +343,7 @@ export async function saveUserSettings(userSettings) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Upserts the user's public profile document so it always reflects the
+ * Upserts the user's profile document so it always reflects the
  * current displayName, photoURL, and last-seen timestamp.
  */
 export async function ensureUserProfile(user) {
@@ -379,9 +384,9 @@ export async function deleteUserWorkspace(uid) {
     getUserProfileDoc(uid),
   ];
 
-  for (let i = 0; i < docRefs.length; i += 450) {
+  for (let i = 0; i < docRefs.length; i += FIRESTORE_BATCH_SIZE) {
     const batch = writeBatch(db);
-    docRefs.slice(i, i + 450).forEach((ref) => batch.delete(ref));
+    docRefs.slice(i, i + FIRESTORE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
     await batch.commit();
   }
 }
@@ -454,6 +459,7 @@ export function persistOfflinePreviewWorkspace() {
     console.error("persistOfflinePreviewWorkspace:", error);
     throw new Error(
       "Preview data could not be saved to browser storage (it may be full or blocked), so this change was not stored.",
+      { cause: error },
     );
   }
 }
@@ -527,7 +533,9 @@ async function importWorkoutLogs(workouts) {
     const previousLogs = appState.workoutLogs;
     const savedWorkouts = workouts.map((workout) => ({
       ...workout,
-      id: workout.id || generateOfflineId(),
+      // Backup IDs belong to the source workspace. A fresh ID prevents a
+      // different workout with the same source ID from overwriting local data.
+      id: generateOfflineId(),
     }));
 
     try {

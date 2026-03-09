@@ -127,6 +127,8 @@ import {
   isEmailJsConfigured,
 } from "./config.js";
 
+let authChangeSequence = 0;
+
 /*
   ---------------------------------------------------------------------------
   Bootstrap
@@ -159,7 +161,8 @@ function initializeInterface() {
   }
 
   watchAuthState(async (user) => {
-    await handleAuthStateChange(user);
+    const sequence = ++authChangeSequence;
+    await handleAuthStateChange(user, sequence);
   });
 }
 
@@ -248,11 +251,8 @@ function bindEvents() {
   ---------------------------------------------------------------------------
 */
 
-async function handleAuthStateChange(user) {
-  if (appState.previewMode && !user) {
-    setLoadingState(false);
-    return;
-  }
+async function handleAuthStateChange(user, sequence) {
+  if (appState.previewMode) return;
 
   const hadUser = Boolean(appState.currentUser);
   clearStatusMessage();
@@ -271,7 +271,7 @@ async function handleAuthStateChange(user) {
       setAuthFeedback("Sign in to load your private dashboard and cloud data.");
     } else {
       setAuthFeedback(
-        "Cloud sign-in is not configured in this public copy yet. Add your Firebase web app values in js/config.js, or use offline preview for local testing.",
+        "Cloud sign-in is not configured. Add your Firebase web app values to the runtime configuration, or use offline preview.",
         "error",
       );
     }
@@ -301,10 +301,14 @@ async function handleAuthStateChange(user) {
 
   try {
     await ensureUserProfile(user);
-    await hydrateUserWorkspace(user.uid);
+    const applied = await hydrateUserWorkspace(user.uid, {
+      shouldApply: () => sequence === authChangeSequence && !appState.previewMode,
+    });
+    if (!applied) return;
     dom.authForm.reset();
     syncWorkspaceUiFromState();
   } catch (error) {
+    if (sequence !== authChangeSequence || appState.previewMode) return;
     console.error(error);
 
     // Sign out so a retry actually re-fires onAuthStateChanged. Without this,
@@ -1278,9 +1282,11 @@ function renderSignedOutState() {
   closeTransientUi();
   clearHistoryFilters();
   clearDashboardPanels(
-    shouldOfferOfflinePreview()
-      ? "Use a local server for Firebase sign-in, or continue with offline preview mode."
-      : "Sign in to view your private dashboard and Firestore-backed trends.",
+    !isFirebaseConfigured()
+      ? "Configure Firebase for cloud sync, or continue with offline preview mode."
+      : shouldOfferOfflinePreview()
+        ? "Serve the app and reconnect for Firebase sign-in, or continue with offline preview mode."
+        : "Sign in to view your private dashboard and Firestore-backed trends.",
   );
   renderHistoryTables();
   renderStorageStatus();
@@ -1299,6 +1305,8 @@ function renderSignedOutState() {
 */
 
 async function handleOfflinePreviewStart() {
+  // An in-flight cloud hydration must not overwrite the separate local workspace.
+  authChangeSequence += 1;
   setAuthFeedback("");
   setLoadingState(true, "Opening offline preview...", "Local Preview Mode");
   setDashboardHydrationState(true);

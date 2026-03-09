@@ -175,6 +175,7 @@ test("dashboard week switches do not reuse live chart canvases", async ({ page }
   });
 
   await openOfflinePreview(page, { seeded: true });
+  await expect(page.locator("#waterChart")).toBeVisible();
   const weekSelect = page.getByLabel("Select a week to review");
   const options = await weekSelect
     .locator("option")
@@ -184,6 +185,48 @@ test("dashboard week switches do not reuse live chart canvases", async ({ page }
   await weekSelect.selectOption(options[1]);
   await weekSelect.selectOption(options[0]);
   expect(chartErrors).toEqual([]);
+});
+
+test("backup import gives source workout IDs fresh local identities", async ({ page }) => {
+  await openOfflinePreview(page, { seeded: true });
+  await page.getByRole("button", { name: "History" }).click();
+
+  const backup = {
+    version: 4,
+    workoutLogs: [
+      {
+        id: "w1",
+        date: "2026-07-20",
+        session_type: "Lower Body",
+        duration: 50,
+        exercises: [
+          {
+            name: "Squat",
+            muscle_group: "Legs",
+            sets: [{ reps: 5, weight: 80 }],
+          },
+        ],
+      },
+    ],
+  };
+
+  await page.locator("#backup-import").setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
+  await page.locator("#confirmation-confirm-button").click();
+  await expect(page.locator("#toast-region")).toContainText("1 workout(s)");
+
+  const storedWorkouts = await page.evaluate((key) => {
+    return JSON.parse(localStorage.getItem(key)).workoutLogs;
+  }, previewKey);
+  expect(storedWorkouts).toHaveLength(2);
+  expect(new Set(storedWorkouts.map((workout) => workout.id)).size).toBe(2);
+  expect(storedWorkouts.map((workout) => workout.session_type).sort()).toEqual([
+    "Lower Body",
+    "Upper Body",
+  ]);
 });
 
 test("account modal delete control is reachable on a 375px viewport", async ({ page }) => {
