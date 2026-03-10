@@ -1,14 +1,17 @@
 .DS_Store
 Thumbs.db
 
-# Dependencies. Prettier is the only one; the app and its tests have none.
+# Dependencies and local tool output.
 node_modules/
+.eslintcache
+*.log
+npm-debug.log*
 .env
 .env.*
 !.env.example
 
-# Machine-local agent settings.
-.claude/settings.local.json
+# Machine-local tool settings.
+.claude/
 
 # Local runtime config override — real Firebase/EmailJS values, never committed.
 js/runtime-config.local.js
@@ -17,3 +20,4 @@ js/runtime-config.local.js
 /test-results
 /playwright-report
 /playwright/.cache
+/coverage

@@ -158,6 +158,7 @@ health-ledger/
 │   ├── ui.js
 │   └── utils.js
 ├── test/
+│   ├── service-worker.test.js
 │   └── utils.test.js
 ├── favicon.svg
 ├── manifest.webmanifest
@@ -195,4 +196,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.8.4
+**Version:** v2.8.5

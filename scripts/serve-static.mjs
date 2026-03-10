@@ -17,7 +17,14 @@ const types = new Map([
 ]);
 
 function resolveRequest(pathname) {
-  const candidate = normalize(join(root, decodeURIComponent(pathname)));
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+
+  const candidate = normalize(join(root, decodedPath));
   if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) return null;
   if (existsSync(candidate) && statSync(candidate).isDirectory())
     return join(candidate, "index.html");
