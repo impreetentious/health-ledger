@@ -121,6 +121,15 @@ Manual smoke test after a change:
 - The full daily form saves with **replace** semantics — cleared fields become null. Quick-water, CSV import and backup import use **merge** semantics, so omitted fields keep their existing values.
 - Backup export and import use a versioned JSON schema. Imports are validated: a backup must be a JSON object carrying at least one of `userSettings`, `dailyLogs` or `workoutLogs`, with correct types and calendar-valid `YYYY-MM-DD` dates. A newer, unsupported schema version is left untouched and reported rather than partially applied.
 
+## Privacy and security
+
+- Firestore rules scope each workspace to its authenticated user, but the data is not end-to-end encrypted by this application. Firebase project owners and the configured Firebase services retain their normal administrative capabilities.
+- When EmailJS is configured, welcome and account-deletion emails send the account's display name and email address to EmailJS; health logs are not included.
+- Offline preview uses unencrypted `localStorage`. Anyone with access to the same browser profile, and scripts running on the same origin, may be able to read it.
+- Optional Firestore persistence uses the browser's IndexedDB storage and can remain after sign-out. Enable it only on a trusted personal device.
+- Exported JSON backups are unencrypted and contain account metadata and health records. Store and share them as sensitive files.
+- Dashboard trend flags are informational summaries of entered data, not medical advice or a diagnosis.
+
 ## Project Structure
 
 ```text
@@ -186,4 +195,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.8.3
+**Version:** v2.8.4

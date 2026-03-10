@@ -244,15 +244,12 @@ test("account modal delete control is reachable on a 375px viewport", async ({ p
   expect(box.y + box.height).toBeLessThanOrEqual(667);
 });
 
-test("offline-preview dashboard has no serious or critical axe violations", async ({ page }) => {
+test("offline-preview dashboard has no automated WCAG A/AA violations", async ({ page }) => {
   await openOfflinePreview(page, { seeded: true });
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
-  const blocking = results.violations.filter((violation) =>
-    ["serious", "critical"].includes(violation.impact ?? ""),
-  );
 
-  expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 });

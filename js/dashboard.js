@@ -569,9 +569,11 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
           tone: "ok",
           title: "Calorie Intake",
           value: isNumber(currentCalories) ? `${Math.round(currentCalories)} kcal` : "No data",
-          detail: isNumber(calorieFloor)
-            ? `Tracking against your ${Math.round(settings.calorieTarget)} kcal target.`
-            : "Set a calorie target in Preferences to enable this warning.",
+          detail: !isNumber(currentCalories)
+            ? "Log calories to compare intake with your saved target."
+            : isNumber(calorieFloor)
+              ? `Tracking against your ${Math.round(settings.calorieTarget)} kcal target.`
+              : "Set a calorie target in Preferences to enable this warning.",
         },
     isNumber(weightLossPercent) && weightLossPercent > 1
       ? {
@@ -584,7 +586,9 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
           tone: "ok",
           title: "Weight Change",
           value: isNumber(weightLossPercent) ? `${weightLossPercent.toFixed(2)}%` : "No data",
-          detail: "No rapid weekly drop is being flagged.",
+          detail: isNumber(weightLossPercent)
+            ? "No rapid weekly drop is being flagged."
+            : "Log weight in consecutive weeks to calculate a weekly change.",
         },
     isNumber(currentProtein) && currentProtein < settings.proteinGramTarget
       ? {
@@ -597,7 +601,9 @@ function renderAlertCards(dailyLogs, selectedWeek, settings) {
           tone: "ok",
           title: "Protein Intake",
           value: isNumber(currentProtein) ? `${Math.round(currentProtein)} g` : "No data",
-          detail: "Protein is at or above the selected target trend.",
+          detail: isNumber(currentProtein)
+            ? "Protein is at or above the selected target trend."
+            : "Log protein to compare intake with your saved target.",
         },
   ];
 

@@ -305,7 +305,7 @@ export function renderMacroChart(logsThisWeek, macroTarget) {
       labels: ["Protein", "Carbs", "Fat"],
       datasets: [
         {
-          label: "Actual Weekly Avg %",
+          label: "Actual Weekly Split %",
           data: actualSplit,
           backgroundColor: ["#68e4ff", "#f5fbff", "#8da0b3"],
           borderWidth: 0,

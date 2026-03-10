@@ -411,16 +411,26 @@ export function setDailyQuote() {
  * Also sets the initial auth feedback message for the local-context case.
  */
 export function configureOfflinePreviewUi() {
+  const isLocalFile = window.location.protocol === "file:";
+  const isOffline = !navigator.onLine;
   const isLocalContext = shouldOfferOfflinePreview();
   const isAvailable = isLocalContext || !isFirebaseConfigured();
   dom.offlinePreviewBlock.hidden = !isAvailable;
 
-  if (isLocalContext) {
+  if (isLocalFile) {
     dom.offlinePreviewCopy.textContent =
       "This local file preview cannot complete Firebase sign-in reliably. " +
       "You can still open Health Ledger in offline preview mode and keep test data in this browser.";
     setAuthFeedback(
       "Use a local server for real Firebase sign-in, or continue in offline preview mode here.",
+      "error",
+    );
+  } else if (isOffline) {
+    dom.offlinePreviewCopy.textContent =
+      "Firebase sign-in is unavailable while this device is offline. " +
+      "You can open Health Ledger in offline preview mode and keep separate data in this browser.";
+    setAuthFeedback(
+      "Reconnect for Firebase sign-in, or continue in offline preview mode here.",
       "error",
     );
   } else if (isAvailable) {
