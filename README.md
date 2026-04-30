@@ -20,7 +20,7 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 
 ## Local Setup
 
-The app itself needs only a web server. Repository checks use Node `20.20.0` and npm `10.8.2`; `.nvmrc` records the Node version, while `engine-strict` rejects Node versions outside the supported `>=20.10` range during installation.
+The app itself needs only a web server. Repository checks use Node `20.20.0` and npm `10.8.2`; `.nvmrc` and `packageManager` record those versions, while `engine-strict` rejects Node versions outside the supported `>=20.10` range during installation.
 
 1. Serve the repository over HTTP. ES modules will not load from `file://`, so open it through a server:
 
@@ -90,18 +90,22 @@ explicit preview workspace.
 
 ## Verify
 
-Unit tests run on Node's built-in test runner, so they need nothing installed:
-
-```bash
-npm test
-```
-
-Formatting is checked by Prettier, the repository's only devDependency:
+Install exactly what the lockfile declares, then run the repository checks and a full dependency
+audit:
 
 ```bash
 npm ci
+npm audit --audit-level=high
+npm run check:version
 npm run format:check
+npm run lint
+npm test
+npx playwright install chromium
+npm run test:e2e
 ```
+
+The end-to-end suite uses Chromium and includes an axe accessibility check. There is no production
+build step: the browser consumes the tracked HTML, CSS, and ES modules directly.
 
 Manual smoke test after a change:
 
@@ -134,6 +138,7 @@ Manual smoke test after a change:
 
 ```text
 health-ledger/
+├── .github/workflows/ci.yml
 ├── css/
 │   └── style.css
 ├── fonts/
@@ -157,12 +162,19 @@ health-ledger/
 │   ├── state.js
 │   ├── ui.js
 │   └── utils.js
+├── scripts/
+│   ├── check-module-boundaries.mjs
+│   ├── check-version-coherence.mjs
+│   └── serve-static.mjs
 ├── test/
+│   ├── e2e/offline-preview.spec.js
 │   ├── service-worker.test.js
 │   └── utils.test.js
 ├── favicon.svg
+├── firestore.rules
 ├── manifest.webmanifest
 ├── package.json
+├── playwright.config.ts
 ├── service-worker.js
 ├── index.html
 └── README.md
@@ -184,7 +196,7 @@ health-ledger/
 
 If a new feature spans views, add a behavior-specific module rather than growing `app.js` back into a monolith.
 
-## Before publishing your own copy
+## Deployment checklist
 
 - Firebase web config and EmailJS public identifiers are deploy-time app configuration, not server secrets — but rotate any live values before publishing a copy that contains them.
 - Tighten Firebase Authentication, Firestore rules, and EmailJS/domain restrictions in the provider dashboards.
@@ -196,4 +208,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.8.5
+**Version:** v2.8.6

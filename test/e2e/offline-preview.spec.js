@@ -163,6 +163,7 @@ test("offline-preview boot reaches the dashboard without cloud configuration", a
 
   await expect(page.getByRole("heading", { name: /welcome back, offline preview/i })).toBeVisible();
   await expect(page.locator("#session-label")).toContainText(/offline preview is active/i);
+  await expect(page.locator(".site-footer-center")).toHaveText("Version v2.8.6");
 });
 
 test("dashboard week switches do not reuse live chart canvases", async ({ page }) => {

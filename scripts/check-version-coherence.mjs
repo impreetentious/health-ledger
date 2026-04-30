@@ -11,38 +11,47 @@ const errors = [];
 const EXPECTED = {
   nvmrc: "20.20.0",
   engines: ">=20.10",
+  packageManager: "npm@10.8.2",
   workflow: ".github/workflows/ci.yml",
   ciNode: null,
 };
-
-function markerVersion(file) {
-  const source = read(file);
-  return source.match(/\*\*Version:\*\*\s*`?v?([0-9]+\.[0-9]+\.[0-9]+)[^`\n]*/)?.[1];
-}
 
 if (!version) errors.push("package.json missing version");
 
 if (existsSync(path.join(root, "package-lock.json"))) {
   const lock = JSON.parse(read("package-lock.json"));
+  if (lock.name !== pkg.name) {
+    errors.push(`package-lock.json name ${lock.name} != package.json ${pkg.name}`);
+  }
+  if (lock.packages?.[""]?.name !== pkg.name) {
+    errors.push(`package-lock packages[""].name ${lock.packages?.[""]?.name} != ${pkg.name}`);
+  }
   if (lock.version !== version) {
     errors.push(`package-lock.json version ${lock.version} != package.json ${version}`);
   }
   if (lock.packages?.[""]?.version !== version) {
     errors.push(`package-lock packages[""].version ${lock.packages?.[""]?.version} != ${version}`);
   }
-} else if (existsSync(path.join(root, "pnpm-lock.yaml"))) {
-  const pnpmLock = read("pnpm-lock.yaml");
-  if (!/^\s{2}\.:\s*$/m.test(pnpmLock)) errors.push("pnpm-lock.yaml missing the root importer");
 } else {
-  errors.push("missing package-lock.json or pnpm-lock.yaml");
+  errors.push("missing package-lock.json");
 }
 
-// README.md, package.json, and the lockfile root are the release-version surfaces.
-// Nothing else is gated: the build-time handover log is disposable by design, so no gate
-// may ever require its presence.
-for (const file of ["README.md"]) {
-  const found = markerVersion(file);
-  if (!found) errors.push(`${file} missing **Version:** vX.Y.Z marker`);
+const versionSurfaces = [
+  {
+    file: "README.md",
+    pattern: /\*\*Version:\*\*\s*`?v?([0-9]+\.[0-9]+\.[0-9]+)[^`\n]*/,
+    marker: "**Version:** vX.Y.Z",
+  },
+  {
+    file: "index.html",
+    pattern: /<span class="site-footer-center">Version v([0-9]+\.[0-9]+\.[0-9]+)<\/span>/,
+    marker: "footer Version vX.Y.Z",
+  },
+];
+
+for (const { file, pattern, marker } of versionSurfaces) {
+  const found = read(file).match(pattern)?.[1];
+  if (!found) errors.push(`${file} missing ${marker} marker`);
   else if (found !== version) errors.push(`${file} version ${found} != package.json ${version}`);
 }
 
@@ -50,6 +59,13 @@ const nvm = read(".nvmrc").trim();
 if (nvm !== EXPECTED.nvmrc) errors.push(`.nvmrc ${nvm} != ${EXPECTED.nvmrc}`);
 if (pkg.engines?.node !== EXPECTED.engines) {
   errors.push(`package.json engines.node ${pkg.engines?.node} != ${EXPECTED.engines}`);
+}
+if (pkg.packageManager !== EXPECTED.packageManager) {
+  errors.push(`package.json packageManager ${pkg.packageManager} != ${EXPECTED.packageManager}`);
+}
+if (pkg.license !== "MIT") errors.push(`package.json license ${pkg.license} != MIT`);
+if (!existsSync(path.join(root, "LICENSE")) || !read("LICENSE").startsWith("MIT License\n")) {
+  errors.push("LICENSE is missing or is not the MIT license declared by package.json");
 }
 const workflow = read(EXPECTED.workflow);
 const ciNodeFile = workflow.match(/^\s*node-version-file:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1];
