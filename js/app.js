@@ -1,5 +1,3 @@
-"use strict";
-
 /*
   Health Ledger — app.js (application module)
   ---------------------------------------------------------------------------

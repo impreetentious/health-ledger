@@ -198,7 +198,7 @@ If a new feature spans views, add a behavior-specific module rather than growing
 
 ## Deployment checklist
 
-- Firebase web config and EmailJS public identifiers are deploy-time app configuration, not server secrets — but rotate any live values before publishing a copy that contains them.
+- Firebase web config and EmailJS public identifiers are deploy-time app configuration, not server secrets — but rotate any live values before publishing a copy that contains them, including values still reachable in the git history.
 - Tighten Firebase Authentication, Firestore rules, and EmailJS/domain restrictions in the provider dashboards.
 - Deploy the versioned [`firestore.rules`](firestore.rules), and review it alongside any data-model change.
 
@@ -208,4 +208,4 @@ MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.8.6
+**Version:** v2.9.0

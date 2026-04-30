@@ -47,6 +47,13 @@ const versionSurfaces = [
     pattern: /<span class="site-footer-center">Version v([0-9]+\.[0-9]+\.[0-9]+)<\/span>/,
     marker: "footer Version vX.Y.Z",
   },
+  {
+    // The offline shell is served cache-first, so the cache key must move with
+    // every release or already-installed clients never see the new build.
+    file: "service-worker.js",
+    pattern: /SHELL_CACHE_PREFIX\}v([0-9]+\.[0-9]+\.[0-9]+)`/,
+    marker: "SHELL_CACHE ${SHELL_CACHE_PREFIX}vX.Y.Z",
+  },
 ];
 
 for (const { file, pattern, marker } of versionSurfaces) {

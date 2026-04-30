@@ -8,13 +8,21 @@ const serviceWorkerSource = await readFile(
   "utf8",
 );
 
+// Read the shipped cache key instead of hard-coding it, so this stays a test of
+// the cleanup rule rather than of the current release number.
+const shellCacheSuffix = serviceWorkerSource.match(/SHELL_CACHE_PREFIX\}(v[\d.]+)`/)?.[1];
+
+test("service worker keys its shell cache to a release version", () => {
+  assert.match(shellCacheSuffix ?? "", /^v\d+\.\d+\.\d+$/);
+});
+
 test("service worker activation deletes only stale Health Ledger caches", async () => {
   const listeners = new Map();
   const deletedCaches = [];
   const cacheNames = [
-    "health-ledger-shell-v4",
     "health-ledger-shell-v5",
     "health-ledger-shell-v6",
+    `health-ledger-shell-${shellCacheSuffix}`,
     "another-app-v1",
   ];
 
@@ -48,5 +56,5 @@ test("service worker activation deletes only stale Health Ledger caches", async 
   listeners.get("activate")({ waitUntil: (promise) => (activation = promise) });
   await activation;
 
-  assert.deepEqual(deletedCaches, ["health-ledger-shell-v4", "health-ledger-shell-v5"]);
+  assert.deepEqual(deletedCaches, ["health-ledger-shell-v5", "health-ledger-shell-v6"]);
 });

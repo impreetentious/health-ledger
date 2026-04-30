@@ -8,7 +8,14 @@
 */
 
 const SHELL_CACHE_PREFIX = "health-ledger-shell-";
-const SHELL_CACHE = `${SHELL_CACHE_PREFIX}v6`;
+// Keyed to the released app version and enforced by
+// scripts/check-version-coherence.mjs. Every release must change this file:
+// shell assets are served cache-first with no revalidation, and the browser
+// only reinstalls the worker (and so refreshes the cache) when these bytes
+// change. A hand-maintained counter leaves installed clients on the build
+// they first cached whenever a release touches index.html, css/, or js/
+// without editing this file.
+const SHELL_CACHE = `${SHELL_CACHE_PREFIX}v2.9.0`;
 const SHELL_ASSETS = [
   "./",
   "./index.html",
