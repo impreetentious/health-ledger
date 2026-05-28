@@ -1,6 +1,8 @@
 import js from "@eslint/js";
 import globals from "globals";
 
+// Flat config. Generated and build output are ignored here rather than in .eslintignore,
+// which flat config no longer reads.
 export default [
   {
     ignores: ["node_modules/**", "fonts/**"],

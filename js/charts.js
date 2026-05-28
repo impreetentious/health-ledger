@@ -341,17 +341,20 @@ export function renderMacroChart(logsThisWeek, macroTarget) {
 /** Horizontal bar chart of total weekly sets grouped by muscle group. */
 export function renderVolumeChart(workoutsThisWeek) {
   const Chart = getChartConstructor();
-  const volumeByMuscleGroup = {};
+  // A Map keeps user-entered muscle-group names as plain keys. A plain object
+  // would inherit Object.prototype members, so a group named "constructor" or
+  // "__proto__" would corrupt or silently drop its own set count.
+  const volumeByMuscleGroup = new Map();
 
   workoutsThisWeek.forEach((workout) => {
     workout.exercises.forEach((exercise) => {
       const key = exercise.muscle_group || "Unspecified";
-      volumeByMuscleGroup[key] = (volumeByMuscleGroup[key] || 0) + exercise.sets.length;
+      volumeByMuscleGroup.set(key, (volumeByMuscleGroup.get(key) ?? 0) + exercise.sets.length);
     });
   });
 
-  const labels = Object.keys(volumeByMuscleGroup);
-  const values = Object.values(volumeByMuscleGroup);
+  const labels = [...volumeByMuscleGroup.keys()];
+  const values = [...volumeByMuscleGroup.values()];
 
   chartInstances.volume = new Chart(dom.volumeChart, {
     type: "bar",

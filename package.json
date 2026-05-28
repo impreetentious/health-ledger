@@ -1,17 +1,17 @@
 {
   "name": "health-ledger",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "description": "A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode.",
   "private": true,
   "type": "module",
   "packageManager": "npm@10.8.2",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=20.10"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ItsMonarch04/health-ledger.git"
+    "url": "git+https://github.com/impreetentious/health-ledger.git"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
@@ -22,11 +22,11 @@
     "check:version": "node scripts/check-version-coherence.mjs"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.1",
+    "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
-    "eslint": "^10.2.0",
-    "globals": "^17.4.0",
-    "prettier": "^3.8.1"
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3"
   }
 }

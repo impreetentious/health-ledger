@@ -1,3 +1,5 @@
+// Every rule below is workspace-scoped: a signed-in user reads and writes only their own
+// documents, and nothing is readable while signed out.
 rules_version = '2';
 
 service cloud.firestore {

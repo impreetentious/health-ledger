@@ -1,3 +1,4 @@
+/* Single stylesheet, loaded directly by the browser — there is no build step. */
 /* Self-hosted Inter Variable (SIL OFL 1.1) — no font CDN. */
 @font-face {
   font-family: Inter;

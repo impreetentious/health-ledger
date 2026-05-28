@@ -1,4 +1,6 @@
 {
+  "lang": "en",
+  "dir": "ltr",
   "name": "Health Ledger",
   "short_name": "Health Ledger",
   "description": "A private health and training tracker for daily logs, habits, and progress trends.",

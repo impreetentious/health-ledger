@@ -1,13 +1,13 @@
 # Health Ledger
 
-A Firebase-backed vanilla JavaScript health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode. There is no build step — the browser loads the ES modules directly.
+A Firebase-backed Vanilla JS health tracker with daily logging, workout history, charts, cloud sync and an offline preview mode. There is no build step — the browser loads the ES modules directly.
 
 ## Two ways to use it
 
 - **Signed in.** With Firebase configured, your data lives in Cloud Firestore under your own account and syncs across devices.
-- **Offline preview.** Without Firebase — or when the browser is offline, or the page was opened from a local file — the app still runs against a local workspace held in `localStorage`. Nothing syncs, and nothing leaves the device. This is separate from the Firestore browser cache described below.
+- **Offline preview.** Without Firebase — or when the browser is offline, or the page was opened from a local file — the app still runs against a local workspace held in `localStorage`. Nothing syncs and nothing leaves the device. This is separate from the Firestore browser cache described below.
 
-## Tech Stack
+## Tech stack
 
 - HTML
 - CSS
@@ -18,7 +18,7 @@ A Firebase-backed vanilla JavaScript health tracker with daily logging, workout 
 - EmailJS
 - Progressive Web App shell (manifest + service worker)
 
-## Local Setup
+## Local setup
 
 The app itself needs only a web server. Repository checks use Node `20.20.0` and npm `10.8.2`; `.nvmrc` and `packageManager` record those versions, while `engine-strict` rejects Node versions outside the supported `>=20.10` range during installation.
 
@@ -52,7 +52,7 @@ The app itself needs only a web server. Repository checks use Node `20.20.0` and
    to its authenticated owner.
 5. Open the served app URL in your browser.
 
-If Firebase is not configured yet, the app still loads and explains that cloud sign-in is unavailable, and offers offline preview instead.
+If Firebase is not configured yet, the app still loads and explains that cloud sign-in is unavailable and offers offline preview instead.
 
 Example `js/runtime-config.local.js` (or `js/runtime-config.js`):
 
@@ -105,7 +105,7 @@ npm run test:e2e
 ```
 
 The end-to-end suite uses Chromium and includes an axe accessibility check. There is no production
-build step: the browser consumes the tracked HTML, CSS, and ES modules directly.
+build step: the browser consumes the tracked HTML, CSS and ES modules directly.
 
 Manual smoke test after a change:
 
@@ -117,11 +117,11 @@ Manual smoke test after a change:
 - JSON backup export and import both work
 - Charts render without module import errors
 - If explicitly enabled on a trusted device, a reload can hydrate the Firestore cache offline
-- Profile, preferences, and logout flows still open and close correctly
+- Profile, preferences and logout flows still open and close correctly
 
 ## Data and backups
 
-- Firestore layout: `users/{uid}/dailyLogs/{YYYY-MM-DD}` (one document per date), `users/{uid}/workoutLogs/{autoId}`, `users/{uid}/meta/settings`, and the `users/{uid}` profile document. Offline preview mirrors the same shapes in `localStorage`.
+- Firestore layout: `users/{uid}/dailyLogs/{YYYY-MM-DD}` (one document per date), `users/{uid}/workoutLogs/{autoId}`, `users/{uid}/meta/settings` and the `users/{uid}` profile document. Offline preview mirrors the same shapes in `localStorage`.
 - The full daily form saves with **replace** semantics — cleared fields become null. Quick-water, CSV import and backup import use **merge** semantics, so omitted fields keep their existing values.
 - Backup export and import use a versioned JSON schema. Imports are validated: a backup must be a JSON object carrying at least one of `userSettings`, `dailyLogs` or `workoutLogs`, with correct types and calendar-valid `YYYY-MM-DD` dates. A newer, unsupported schema version is left untouched and reported rather than partially applied.
 
@@ -129,83 +129,35 @@ Manual smoke test after a change:
 
 - Firestore rules scope each workspace to its authenticated user, but the data is not end-to-end encrypted by this application. Firebase project owners and the configured Firebase services retain their normal administrative capabilities.
 - When EmailJS is configured, welcome and account-deletion emails send the account's display name and email address to EmailJS; health logs are not included.
-- Offline preview uses unencrypted `localStorage`. Anyone with access to the same browser profile, and scripts running on the same origin, may be able to read it.
+- Offline preview uses unencrypted `localStorage`. Anyone with access to the same browser profile and scripts running on the same origin, may be able to read it.
 - Optional Firestore persistence uses the browser's IndexedDB storage and can remain after sign-out. Enable it only on a trusted personal device.
 - Exported JSON backups are unencrypted and contain account metadata and health records. Store and share them as sensitive files.
 - Dashboard trend flags are informational summaries of entered data, not medical advice or a diagnosis.
 
-## Project Structure
-
-```text
-health-ledger/
-├── .github/workflows/ci.yml
-├── css/
-│   └── style.css
-├── fonts/
-│   ├── InterVariable.woff2
-│   └── OFL.txt
-├── js/
-│   ├── app.js
-│   ├── auth.js
-│   ├── bootstrap.js
-│   ├── charts.js
-│   ├── config.js
-│   ├── dashboard.js
-│   ├── db.js
-│   ├── dom.js
-│   ├── firebase.js
-│   ├── forms.js
-│   ├── history.js
-│   ├── pwa.js
-│   ├── runtime-config.js
-│   ├── runtime-config.local.example.js
-│   ├── state.js
-│   ├── ui.js
-│   └── utils.js
-├── scripts/
-│   ├── check-module-boundaries.mjs
-│   ├── check-version-coherence.mjs
-│   └── serve-static.mjs
-├── test/
-│   ├── e2e/offline-preview.spec.js
-│   ├── service-worker.test.js
-│   └── utils.test.js
-├── favicon.svg
-├── firestore.rules
-├── manifest.webmanifest
-├── package.json
-├── playwright.config.ts
-├── service-worker.js
-├── index.html
-└── README.md
-```
-
 ## Module conventions
 
-- `index.html` loads Chart.js, EmailJS, and `js/bootstrap.js`; the bootstrap loads optional runtime configuration before the application module
+- `index.html` loads Chart.js, EmailJS and `js/bootstrap.js`; the bootstrap loads optional runtime configuration before the application module
 - `js/app.js` orchestrates the app and binds events — it is the only module that coordinates across subsystems
 - `js/config.js` owns deploy-time configuration and shared constants
 - `js/firebase.js` owns Firebase initialization
 - `js/auth.js` handles auth and EmailJS helpers; it stays free of DOM manipulation
 - `js/db.js` owns Firestore and offline-preview persistence; it stays free of DOM manipulation
 - `js/ui.js` owns visible UI state updates
-- `js/forms.js`, `js/dashboard.js`, and `js/history.js` own view-specific behavior
+- `js/forms.js`, `js/dashboard.js` and `js/history.js` own view-specific behavior
 - `js/utils.js` contains pure helpers and stays side-effect-free
 - `js/dom.js` caches DOM references
 - `js/state.js` owns in-memory application state
 
 If a new feature spans views, add a behavior-specific module rather than growing `app.js` back into a monolith.
 
-## Deployment checklist
+## Contributing
 
-- Firebase web config and EmailJS public identifiers are deploy-time app configuration, not server secrets — but rotate any live values before publishing a copy that contains them, including values still reachable in the git history.
-- Tighten Firebase Authentication, Firestore rules, and EmailJS/domain restrictions in the provider dashboards.
-- Deploy the versioned [`firestore.rules`](firestore.rules), and review it alongside any data-model change.
+Issues and pull requests are welcome on [GitHub](https://github.com/impreetentious/health-ledger). Open an issue before anything substantial, keep changes focused and leave the checks under [Verify](#verify) green.
 
 ## License
 
-MIT © Sidakpreet Singh — see [LICENSE](LICENSE).
+Apache-2.0 © 2024-2026 Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.9.0
+**Version:** v2.9.1

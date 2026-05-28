@@ -1,7 +1,15 @@
+import { readFileSync } from "node:fs";
+
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const previewKey = "healthLedger.offlinePreview.v1";
+
+// Read the shipped version instead of hard-coding it, so this stays a test of
+// the footer wiring rather than of the current release number.
+const appVersion = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+).version;
 
 const firebaseAppStub = "export function initializeApp(config) { return { config }; }";
 const firebaseAuthStub = `
@@ -163,7 +171,7 @@ test("offline-preview boot reaches the dashboard without cloud configuration", a
 
   await expect(page.getByRole("heading", { name: /welcome back, offline preview/i })).toBeVisible();
   await expect(page.locator("#session-label")).toContainText(/offline preview is active/i);
-  await expect(page.locator(".site-footer-center")).toHaveText("Version v2.9.0");
+  await expect(page.locator(".site-footer-center")).toHaveText(`Version v${appVersion}`);
 });
 
 test("dashboard week switches do not reuse live chart canvases", async ({ page }) => {

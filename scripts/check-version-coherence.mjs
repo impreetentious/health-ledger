@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Every release-version surface is listed here; adding a new one means adding it here too.
 const read = (file) => readFileSync(path.join(root, file), "utf8");
 const pkg = JSON.parse(read("package.json"));
 const version = pkg.version;
@@ -70,9 +71,12 @@ if (pkg.engines?.node !== EXPECTED.engines) {
 if (pkg.packageManager !== EXPECTED.packageManager) {
   errors.push(`package.json packageManager ${pkg.packageManager} != ${EXPECTED.packageManager}`);
 }
-if (pkg.license !== "MIT") errors.push(`package.json license ${pkg.license} != MIT`);
-if (!existsSync(path.join(root, "LICENSE")) || !read("LICENSE").startsWith("MIT License\n")) {
-  errors.push("LICENSE is missing or is not the MIT license declared by package.json");
+if (pkg.license !== "Apache-2.0") errors.push(`package.json license ${pkg.license} != Apache-2.0`);
+if (
+  !existsSync(path.join(root, "LICENSE")) ||
+  !read("LICENSE").trimStart().startsWith("Apache License\n")
+) {
+  errors.push("LICENSE is missing or is not the Apache license declared by package.json");
 }
 const workflow = read(EXPECTED.workflow);
 const ciNodeFile = workflow.match(/^\s*node-version-file:\s*['"]?([^'"\s]+)['"]?\s*$/m)?.[1];

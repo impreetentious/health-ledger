@@ -799,7 +799,10 @@ async function handleSettingsSubmit(event) {
   const waterTargetGlasses = Number(dom.settingsForm.elements.waterTargetGlasses.value);
   const waterUnitAmountMl = Number(dom.settingsForm.elements.waterUnitAmountMl.value);
 
-  if (protein + carbs + fat !== 100) {
+  // Same 0.01 tolerance normalizeUserSettings and buildMacroPayloadFromInputs
+  // use. Exact equality would reject valid fractional splits such as
+  // 33.4 / 33.3 / 33.3, which sum to 99.99999999999999 in binary floating point.
+  if (Math.abs(protein + carbs + fat - 100) > 0.01) {
     showStatusMessage("Macro targets must add up to exactly 100%.", true);
     return;
   }

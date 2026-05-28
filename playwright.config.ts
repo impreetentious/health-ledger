@@ -3,6 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = 3025;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
+// End-to-end runs against the built export served by `serve`, not the dev server,
+// so the suite exercises the same bytes the host will publish.
 export default defineConfig({
   testDir: "./test/e2e",
   fullyParallel: false,
