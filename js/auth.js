@@ -25,7 +25,7 @@ import {
   signInWithPopup,
   signOut,
   updateProfile,
-} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
 import { auth, googleProvider, assertFirebaseConfigured } from "./firebase.js";
 import { getFriendlyUserName } from "./utils.js";

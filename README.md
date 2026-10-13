@@ -20,7 +20,7 @@ A Firebase-backed Vanilla JS health tracker with daily logging, workout history,
 
 ## Local setup
 
-The app itself needs only a web server. Repository checks use Node `20.20.0` and npm `10.8.2`; `.nvmrc` and `packageManager` record those versions, while `engine-strict` rejects Node versions outside the supported `>=20.10` range during installation.
+The app itself needs only a web server. Repository checks use Node `24.21.0` and npm `11.19.0`; `.nvmrc` and `packageManager` record those versions, while `engine-strict` rejects Node versions outside the supported `>=22.13.0` range during installation.
 
 1. Serve the repository over HTTP. ES modules will not load from `file://`, so open it through a server:
 
@@ -160,4 +160,4 @@ Apache-2.0 © 2024-2026 Sidakpreet Singh — see [LICENSE](LICENSE).
 
 ---
 
-**Version:** v2.9.1
+**Version:** v2.9.2

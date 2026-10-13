@@ -76,13 +76,13 @@ async function stubExternalAssets(page) {
         body: "window.emailjs = { init() {}, send: async () => ({}) };",
       }),
   );
-  await page.route("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js", (route) =>
+  await page.route("https://www.gstatic.com/firebasejs/*/firebase-app.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: firebaseAppStub }),
   );
-  await page.route("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js", (route) =>
+  await page.route("https://www.gstatic.com/firebasejs/*/firebase-auth.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: firebaseAuthStub }),
   );
-  await page.route("https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js", (route) =>
+  await page.route("https://www.gstatic.com/firebasejs/*/firebase-firestore.js", (route) =>
     route.fulfill({ contentType: "text/javascript", body: firestoreStub }),
   );
 }

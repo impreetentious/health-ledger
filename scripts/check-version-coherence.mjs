@@ -10,9 +10,9 @@ const pkg = JSON.parse(read("package.json"));
 const version = pkg.version;
 const errors = [];
 const EXPECTED = {
-  nvmrc: "20.20.0",
-  engines: ">=20.10",
-  packageManager: "npm@10.8.2",
+  nvmrc: "24.21.0",
+  engines: ">=22.13.0",
+  packageManager: "npm@11.19.0",
   workflow: ".github/workflows/ci.yml",
   ciNode: null,
 };

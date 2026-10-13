@@ -15,7 +15,7 @@ const SHELL_CACHE_PREFIX = "health-ledger-shell-";
 // change. A hand-maintained counter leaves installed clients on the build
 // they first cached whenever a release touches index.html, css/, or js/
 // without editing this file.
-const SHELL_CACHE = `${SHELL_CACHE_PREFIX}v2.9.1`;
+const SHELL_CACHE = `${SHELL_CACHE_PREFIX}v2.9.2`;
 const SHELL_ASSETS = [
   "./",
   "./index.html",
@@ -43,7 +43,7 @@ const SHELL_ASSETS = [
 const OPTIONAL_SHELL_ASSETS = ["./js/runtime-config.local.js"];
 
 const STATIC_RUNTIME_PREFIXES = [
-  "https://www.gstatic.com/firebasejs/12.9.0/",
+  "https://www.gstatic.com/firebasejs/12.19.0/",
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.1/",
   "https://cdn.jsdelivr.net/npm/@emailjs/browser@4.4.1/",
 ];
