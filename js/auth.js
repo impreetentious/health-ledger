@@ -152,13 +152,13 @@ export async function deleteAuthUser(user) {
  * Auth profile. Pass empty strings to clear a field.
  * Returns the refreshed auth.currentUser object.
  */
-export async function updateUserProfile(displayName, photoURL) {
+export async function updateUserProfile(displayName, photoURL, user = auth.currentUser) {
   assertFirebaseConfigured();
-  await updateProfile(auth.currentUser, {
+  await updateProfile(user, {
     displayName: displayName || null,
     photoURL: photoURL || null,
   });
-  return auth.currentUser;
+  return user;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

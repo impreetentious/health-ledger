@@ -15,7 +15,7 @@ const SHELL_CACHE_PREFIX = "health-ledger-shell-";
 // change. A hand-maintained counter leaves installed clients on the build
 // they first cached whenever a release touches index.html, css/, or js/
 // without editing this file.
-const SHELL_CACHE = `${SHELL_CACHE_PREFIX}v2.9.2`;
+const SHELL_CACHE = `${SHELL_CACHE_PREFIX}v2.9.3`;
 const SHELL_ASSETS = [
   "./",
   "./index.html",

@@ -590,6 +590,141 @@ export function normalizeBackupPayload(payload = {}) {
   };
 }
 
+/** Computes the exact restore writes without changing the workspace. */
+export function buildRestorePlan(
+  payload,
+  workspace,
+  { incomingWins = false, restoreSettings = false } = {},
+) {
+  const backup = normalizeBackupPayload(payload);
+  const fields = [
+    "weight",
+    "calories",
+    "steps",
+    "sleep",
+    "energy",
+    "notes",
+    "macros.protein",
+    "macros.carbs",
+    "macros.fat",
+    "macroPercentages.protein",
+    "macroPercentages.carbs",
+    "macroPercentages.fat",
+    "water.glasses",
+    "water.targetGlasses",
+    "water.unitAmountMl",
+  ];
+  const read = (value, path) => path.split(".").reduce((node, key) => node?.[key], value);
+  const write = (value, path, next) => {
+    const keys = path.split(".");
+    const last = keys.pop();
+    const parent = keys.reduce((node, key) => (node[key] ??= {}), value);
+    parent[last] = next;
+  };
+  const folded = new Map();
+  for (const raw of payload.dailyLogs || []) {
+    const row = folded.get(raw.date) || { date: raw.date };
+    const normalized = normalizeDailyLog(raw);
+    for (const path of fields) {
+      let supplied = read(raw, path);
+      if (path.startsWith("water.") && supplied === undefined) {
+        supplied =
+          raw[
+            {
+              "water.glasses": "waterGlasses",
+              "water.targetGlasses": "waterTargetGlasses",
+              "water.unitAmountMl": "waterUnitAmountMl",
+            }[path]
+          ];
+      }
+      if (path === "notes" ? typeof supplied === "string" : toNumberOrNull(supplied) !== null) {
+        write(row, path, read(normalized, path));
+      }
+    }
+    folded.set(raw.date, row);
+  }
+  const current = new Map(workspace.dailyLogs.map((log) => [log.date, log]));
+  const dailyLogs = [];
+  const conflicts = [];
+  let newDates = 0,
+    changedDates = 0,
+    unchangedDates = 0;
+  for (const row of folded.values()) {
+    const existing = current.get(row.date);
+    const before = existing || createEmptyDailyLog(row.date);
+    const after = clonePlainData(before);
+    const changes = [];
+    for (const path of fields) {
+      const incoming = read(row, path);
+      if (incoming === undefined) continue;
+      const old = read(before, path);
+      if (old === incoming) continue;
+      const conflict = existing && old !== null && old !== undefined && old !== "";
+      const apply = !conflict || incomingWins;
+      changes.push({
+        field: path,
+        before: old,
+        after: incoming,
+        conflict: Boolean(conflict),
+        apply,
+      });
+      if (apply) write(after, path, incoming);
+    }
+    if (changes.some((change) => change.conflict)) conflicts.push({ date: row.date, changes });
+    if (!existing) newDates += 1;
+    else if (changes.some((change) => change.apply)) changedDates += 1;
+    else unchangedDates += 1;
+    if (!existing || changes.some((change) => change.apply)) dailyLogs.push(after);
+  }
+  const signatures = new Set(workspace.workoutLogs.map(getWorkoutSignature));
+  const workoutLogs = [];
+  let workoutSkipped = 0;
+  for (const log of backup.workoutLogs) {
+    const signature = getWorkoutSignature(log);
+    if (signatures.has(signature)) workoutSkipped += 1;
+    else {
+      signatures.add(signature);
+      workoutLogs.push(log);
+    }
+  }
+  const settings = clonePlainData(workspace.userSettings);
+  const settingsChanges = [];
+  if (backup.hasUserSettings) {
+    for (const key of Object.keys(settings)) {
+      const supplied = payload.userSettings[key];
+      const valid =
+        key === "macroTarget"
+          ? supplied &&
+            Object.values(supplied).length === 3 &&
+            Object.values(supplied).every((v) => isNumber(v) && v >= 0 && v <= 100) &&
+            Math.abs(Object.values(supplied).reduce((a, b) => a + b, 0) - 100) <= 0.01
+          : isNumber(supplied) && supplied >= 0;
+      if (!valid || JSON.stringify(settings[key]) === JSON.stringify(backup.userSettings[key]))
+        continue;
+      settingsChanges.push({ field: key, before: settings[key], after: backup.userSettings[key] });
+      settings[key] = backup.userSettings[key];
+    }
+  }
+  return {
+    version: backup.version,
+    dailyLogs,
+    workoutLogs,
+    userSettings: restoreSettings && settingsChanges.length ? settings : null,
+    conflicts,
+    settingsChanges,
+    newDates,
+    changedDates,
+    unchangedDates,
+    sourceRows: (payload.dailyLogs || []).length,
+    duplicateRows: (payload.dailyLogs || []).length - folded.size,
+    workoutSkipped,
+    hasUserSettings: backup.hasUserSettings,
+    hasChanges: Boolean(
+      dailyLogs.length || workoutLogs.length || (restoreSettings && settingsChanges.length),
+    ),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. Macro math
 // ─────────────────────────────────────────────────────────────────────────────

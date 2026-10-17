@@ -17,6 +17,10 @@
 import { dom, cacheDomReferences } from "./dom.js";
 import {
   appState,
+  invalidateSession,
+  captureSession,
+  isSessionCurrent,
+  markWorkspaceChanged,
   getExistingDailyLog,
   clearUserDataState,
   clearPendingGoogleLink,
@@ -46,6 +50,7 @@ import {
   saveWorkoutLog,
   saveUserSettings,
   importWorkspaceBackup,
+  prepareWorkspaceRestore,
   importDailyLogs,
   deleteDailyLog,
   deleteWorkoutLog,
@@ -252,7 +257,14 @@ function bindEvents() {
 async function handleAuthStateChange(user, sequence) {
   if (appState.previewMode) return;
 
+  invalidateSession();
+  setWorkspaceEditsDisabled(false);
   const hadUser = Boolean(appState.currentUser);
+  clearUserDataState();
+  renderSignedOutState();
+  document
+    .querySelectorAll('[aria-busy="true"]')
+    .forEach((button) => setButtonLoading(button, false));
   clearStatusMessage();
   setAuthPending(false);
 
@@ -299,6 +311,7 @@ async function handleAuthStateChange(user, sequence) {
 
   try {
     await ensureUserProfile(user);
+    if (sequence !== authChangeSequence || appState.previewMode) return;
     const applied = await hydrateUserWorkspace(user.uid, {
       shouldApply: () => sequence === authChangeSequence && !appState.previewMode,
     });
@@ -316,7 +329,9 @@ async function handleAuthStateChange(user, sequence) {
     if (isFirebaseConfigured()) {
       try {
         await performSignOut();
+        if (appState.currentUser || appState.previewMode) return;
       } catch (signOutError) {
+        if (sequence !== authChangeSequence || appState.previewMode) return;
         console.error(signOutError);
       }
     }
@@ -332,8 +347,10 @@ async function handleAuthStateChange(user, sequence) {
       true,
     );
   } finally {
-    setDashboardHydrationState(false);
-    setLoadingState(false);
+    if (!(sequence !== authChangeSequence || appState.previewMode)) {
+      setDashboardHydrationState(false);
+      setLoadingState(false);
+    }
   }
 }
 
@@ -518,6 +535,7 @@ async function handleLogoutConfirm() {
   closeUtilityModal(dom.logoutModal);
 
   if (appState.previewMode) {
+    invalidateSession();
     appState.previewMode = false;
     appState.currentUser = null;
     clearUserDataState();
@@ -528,11 +546,14 @@ async function handleLogoutConfirm() {
     return;
   }
 
+  invalidateSession();
+  const session = captureSession("handleLogoutConfirm");
   setLoadingState(true, "Signing you out...");
 
   try {
     await performSignOut();
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     setLoadingState(false);
     showStatusMessage(formatFirebaseError(error), true);
@@ -591,6 +612,11 @@ function refreshCurrentView(viewName = "dashboard") {
 */
 
 async function handleDailyLogSubmit(event) {
+  if (appState.restoreApplying) {
+    event?.preventDefault?.();
+    return;
+  }
+  const session = captureSession("handleDailyLogSubmit");
   event.preventDefault();
 
   if (!appState.currentUser) {
@@ -646,19 +672,25 @@ async function handleDailyLogSubmit(event) {
     // The form is fully populated from the existing log, so it is the
     // complete record for this date — replace so cleared fields actually clear.
     await saveDailyLog(dailyLog, { replace: true });
+    if (!isSessionCurrent(session)) return;
     renderHistoryTables();
     renderStorageStatus();
     showStatusMessage(`Saved daily log for ${dailyLog.date}.`);
     refreshCurrentView(getActiveViewName());
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setButtonLoading(saveButton, false);
+    if (isSessionCurrent(session)) {
+      setButtonLoading(saveButton, false);
+    }
   }
 }
 
 async function handleQuickWaterAdd() {
+  if (appState.restoreApplying) return;
+  const session = captureSession("handleQuickWaterAdd");
   if (!appState.currentUser) {
     showStatusMessage("Sign in before adding water.", true);
     setAppLocked(true);
@@ -685,6 +717,7 @@ async function handleQuickWaterAdd() {
         unitAmountMl,
       },
     });
+    if (!isSessionCurrent(session)) return;
 
     if (dom.dailyForm.elements.date.value === today) {
       populateDailyFormForDate(today);
@@ -697,10 +730,13 @@ async function handleQuickWaterAdd() {
       `Added 1 glass of water. Today is now ${formatMaybeNumber(savedLog.water.glasses)} / ${formatMaybeNumber(targetGlasses)} glasses.`,
     );
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setButtonLoading(dom.quickWaterButton, false);
+    if (isSessionCurrent(session)) {
+      setButtonLoading(dom.quickWaterButton, false);
+    }
   }
 }
 
@@ -711,6 +747,11 @@ async function handleQuickWaterAdd() {
 */
 
 async function handleWorkoutLogSubmit(event) {
+  if (appState.restoreApplying) {
+    event?.preventDefault?.();
+    return;
+  }
+  const session = captureSession("handleWorkoutLogSubmit");
   event.preventDefault();
 
   if (!appState.currentUser) {
@@ -738,6 +779,7 @@ async function handleWorkoutLogSubmit(event) {
 
   try {
     const savedWorkout = await saveWorkoutLog(workoutLog);
+    if (!isSessionCurrent(session)) return;
     populateExerciseNameSuggestions(appState.workoutLogs);
     dom.repeatLastWorkoutButton.disabled = false;
     renderHistoryTables();
@@ -750,10 +792,13 @@ async function handleWorkoutLogSubmit(event) {
     resetWorkoutForm();
     refreshCurrentView(getActiveViewName());
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setButtonLoading(saveButton, false);
+    if (isSessionCurrent(session)) {
+      setButtonLoading(saveButton, false);
+    }
   }
 }
 
@@ -783,6 +828,11 @@ function handleRepeatLastWorkout() {
 */
 
 async function handleSettingsSubmit(event) {
+  if (appState.restoreApplying) {
+    event?.preventDefault?.();
+    return;
+  }
+  const session = captureSession("handleSettingsSubmit");
   event.preventDefault();
 
   if (!appState.currentUser) {
@@ -818,6 +868,7 @@ async function handleSettingsSubmit(event) {
       waterTargetGlasses,
       waterUnitAmountMl,
     });
+    if (!isSessionCurrent(session)) return;
 
     if (!getExistingDailyLog(dom.dailyForm.elements.date.value)) {
       populateDailyFormForDate(dom.dailyForm.elements.date.value);
@@ -828,10 +879,13 @@ async function handleSettingsSubmit(event) {
     closeUtilityModal(dom.preferencesModal);
     refreshCurrentView(getActiveViewName());
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setButtonLoading(saveButton, false);
+    if (isSessionCurrent(session)) {
+      setButtonLoading(saveButton, false);
+    }
   }
 }
 
@@ -842,6 +896,11 @@ async function handleSettingsSubmit(event) {
 */
 
 async function handleAccountSubmit(event) {
+  if (appState.restoreApplying) {
+    event?.preventDefault?.();
+    return;
+  }
+  const session = captureSession("handleAccountSubmit");
   event.preventDefault();
 
   if (!appState.currentUser) {
@@ -877,23 +936,31 @@ async function handleAccountSubmit(event) {
       return;
     }
 
-    const updatedUser = await updateUserProfile(displayName, photoURL);
+    const updatedUser = await updateUserProfile(displayName, photoURL, appState.currentUser);
+    if (!isSessionCurrent(session)) return;
 
     appState.currentUser = updatedUser;
+    markWorkspaceChanged();
     await ensureUserProfile(updatedUser);
+    if (!isSessionCurrent(session)) return;
     setSessionState(updatedUser);
     refreshCurrentView(getActiveViewName());
     closeUtilityModal(dom.accountModal);
     showStatusMessage("Your account profile has been updated.");
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setButtonLoading(saveButton, false);
+    if (isSessionCurrent(session)) {
+      setButtonLoading(saveButton, false);
+    }
   }
 }
 
 async function handleAccountDelete() {
+  if (appState.restoreApplying) return;
+  const session = captureSession("handleAccountDelete");
   if (!appState.currentUser) {
     showStatusMessage("Sign in before deleting your account.", true);
     setAppLocked(true);
@@ -908,6 +975,7 @@ async function handleAccountDelete() {
     confirmLabel: "Delete account",
     danger: true,
   });
+  if (!isSessionCurrent(session)) return;
 
   if (!confirmed) {
     return;
@@ -938,11 +1006,14 @@ async function handleAccountDelete() {
     }
 
     await reauthenticateUser(user, dom.accountDeletePassword.value);
+    if (!isSessionCurrent(session)) return;
 
     if (isEmailJsConfigured()) {
       try {
         await sendGoodbyeEmail(user);
+        if (!isSessionCurrent(session)) return;
       } catch (emailError) {
+        if (!isSessionCurrent(session)) return;
         console.error(emailError);
         showStatusMessage(
           "Account deletion will continue, but the goodbye email could not be sent. Check the EmailJS runtime configuration.",
@@ -952,7 +1023,9 @@ async function handleAccountDelete() {
     }
 
     await deleteUserWorkspace(user.uid);
+    if (!isSessionCurrent(session)) return;
     await deleteAuthUser(user);
+    if (!isSessionCurrent(session)) return;
 
     appState.currentUser = null;
     clearUserDataState();
@@ -964,10 +1037,13 @@ async function handleAccountDelete() {
     );
     showStatusMessage("Your Health Ledger account and stored data have been deleted.");
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setLoadingState(false);
+    if (isSessionCurrent(session)) {
+      setLoadingState(false);
+    }
   }
 }
 
@@ -978,6 +1054,11 @@ async function handleAccountDelete() {
 */
 
 async function handleCsvImport(event) {
+  if (appState.restoreApplying) {
+    event?.preventDefault?.();
+    return;
+  }
+  const session = captureSession("handleCsvImport");
   const file = event.target.files?.[0];
   if (!file) {
     return;
@@ -993,8 +1074,10 @@ async function handleCsvImport(event) {
   try {
     setButtonLoading(dom.csvImport, true);
     const csvText = await file.text();
+    if (!isSessionCurrent(session)) return;
     const importedLogs = parseLegacyCsv(csvText);
     const result = await importDailyLogs(importedLogs);
+    if (!isSessionCurrent(session)) return;
 
     renderHistoryTables();
     renderStorageStatus();
@@ -1006,59 +1089,138 @@ async function handleCsvImport(event) {
       `Imported ${result.dailyImported} daily log(s) from ${file.name}.${duplicateNote}`,
     );
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(describeImportFailure(error, "Unable to import that CSV file."), true);
   } finally {
-    setButtonLoading(dom.csvImport, false);
-    event.target.value = "";
+    if (isSessionCurrent(session)) {
+      setButtonLoading(dom.csvImport, false);
+      event.target.value = "";
+    }
   }
 }
 
 async function handleBackupImport(event) {
   const file = event.target.files?.[0];
-  if (!file) {
-    return;
-  }
-
-  if (!appState.currentUser) {
-    showStatusMessage("Sign in before importing a backup.", true);
-    event.target.value = "";
-    setAppLocked(true);
-    return;
-  }
-
-  const confirmed = await requestConfirmation({
-    eyebrow: "Restore backup",
-    title: "Import this backup into this workspace?",
-    message:
-      "Daily logs will merge by date, duplicate workouts will be skipped, and saved targets will be restored.",
-    confirmLabel: "Import backup",
-  });
-
-  if (!confirmed) {
-    event.target.value = "";
-    return;
-  }
-
+  if (!file || !appState.currentUser || appState.restoreApplying) return;
+  const session = captureSession("handleBackupImport");
   try {
+    const payload = JSON.parse(await file.text());
+    if (!isSessionCurrent(session)) return;
+    let prepared = prepareWorkspaceRestore(payload);
+    const revision = prepared.revision;
+    const content = document.createElement("div");
+    content.dataset.restorePreview = "";
+    const incoming = document.createElement("input");
+    incoming.type = "checkbox";
+    const settings = document.createElement("input");
+    settings.type = "checkbox";
+    settings.disabled = !prepared.plan.hasUserSettings;
+    const summary = document.createElement("p");
+    summary.setAttribute("aria-live", "polite");
+    const details = document.createElement("div");
+    for (const [control, text] of [
+      [incoming, "Apply imported values to conflicting fields"],
+      [settings, "Restore supplied settings"],
+    ]) {
+      const label = document.createElement("label");
+      label.append(control, document.createTextNode(text));
+      content.append(label);
+    }
+    const exportButton = document.createElement("button");
+    exportButton.type = "button";
+    exportButton.textContent = "Export current backup";
+    exportButton.addEventListener("click", handleBackupExport);
+    content.append(summary, details, exportButton);
+    const update = () => {
+      if (!isSessionCurrent(session) || revision !== appState.workspaceRevision) {
+        dom.confirmationConfirmButton.disabled = true;
+        summary.textContent = "Workspace changed. Cancel and prepare a fresh preview.";
+        return;
+      }
+      prepared = prepareWorkspaceRestore(payload, {
+        incomingWins: incoming.checked,
+        restoreSettings: settings.checked,
+      });
+      const plan = prepared.plan;
+      summary.textContent = `${plan.sourceRows} rows, ${plan.duplicateRows} duplicate rows; ${plan.newDates} new dates, ${plan.changedDates} changed dates, ${plan.unchangedDates} unchanged dates; ${plan.workoutLogs.length} new workouts, ${plan.workoutSkipped} duplicate workouts; ${settings.checked ? plan.settingsChanges.length : 0} settings changes.`;
+      details.replaceChildren();
+      for (const conflict of plan.conflicts) {
+        const section = document.createElement("details");
+        const heading = document.createElement("summary");
+        heading.textContent = conflict.date;
+        section.append(heading);
+        for (const change of conflict.changes) {
+          const line = document.createElement("p");
+          line.textContent = `${change.field}: ${JSON.stringify(change.before)} → ${JSON.stringify(change.after)} (${change.apply ? "apply" : "keep existing"})`;
+          section.append(line);
+        }
+        details.append(section);
+      }
+      for (const change of plan.settingsChanges) {
+        const line = document.createElement("p");
+        line.textContent = `${change.field}: ${JSON.stringify(change.before)} → ${JSON.stringify(change.after)} (${settings.checked ? "apply" : "keep existing"})`;
+        details.append(line);
+      }
+      dom.confirmationConfirmButton.disabled = !plan.hasChanges;
+    };
+    incoming.addEventListener("change", update);
+    settings.addEventListener("change", update);
+    const confirmation = requestConfirmation({
+      eyebrow: "Restore backup",
+      title: "Import this backup into this workspace?",
+      message:
+        "Review the planned changes. Existing conflicting values are kept unless you select replacement.",
+      confirmLabel: "Import backup",
+      content,
+    });
+    update();
+    const confirmed = await confirmation;
+    if (!isSessionCurrent(session) || !confirmed) return;
+    if (revision !== appState.workspaceRevision)
+      throw new Error("Workspace changed. Prepare a fresh restore preview.");
     setButtonLoading(dom.importBackupButton, true);
-    const backupText = await file.text();
-    const backupPayload = JSON.parse(backupText);
-    const result = await importWorkspaceBackup(backupPayload);
-
-    renderHistoryTables();
-    renderStorageStatus();
-    refreshCurrentView(getActiveViewName());
+    setWorkspaceEditsDisabled(true);
+    const result = await importWorkspaceBackup(prepared);
+    if (!isSessionCurrent(session)) return;
+    syncWorkspaceUiFromState();
     showStatusMessage(
       `Backup import complete. Added ${result.dailyImported} daily log(s), ${result.workoutImported} workout(s), and skipped ${result.workoutSkipped} duplicate workout(s).`,
     );
   } catch (error) {
-    console.error(error);
-    showStatusMessage(describeImportFailure(error, "Unable to import that backup file."), true);
+    if (!isSessionCurrent(session)) return;
+    syncWorkspaceUiFromState();
+    showStatusMessage(
+      describeImportFailure(
+        error,
+        "Unable to import that backup file. Prepare a fresh preview before retrying.",
+      ),
+      true,
+    );
   } finally {
-    setButtonLoading(dom.importBackupButton, false);
-    event.target.value = "";
+    if (isSessionCurrent(session)) {
+      setButtonLoading(dom.importBackupButton, false);
+      setWorkspaceEditsDisabled(false);
+      event.target.value = "";
+      dom.confirmationConfirmButton.disabled = false;
+    }
   }
+}
+
+function setWorkspaceEditsDisabled(disabled) {
+  for (const form of [dom.dailyForm, dom.workoutForm, dom.settingsForm, dom.accountForm]) {
+    form.querySelectorAll("input, select, textarea, button").forEach((control) => {
+      if (disabled) {
+        control.dataset.restoreWasDisabled = String(control.disabled);
+        control.disabled = true;
+      } else if (control.dataset.restoreWasDisabled !== undefined) {
+        control.disabled = control.dataset.restoreWasDisabled === "true";
+        delete control.dataset.restoreWasDisabled;
+      }
+    });
+  }
+  for (const control of [dom.csvImport, dom.importBackupButton, dom.quickWaterButton])
+    control.disabled = disabled;
 }
 
 /*
@@ -1096,6 +1258,8 @@ function handleDocumentClick(event) {
 }
 
 async function handleHistoryAction(button) {
+  if (appState.restoreApplying) return;
+  const session = captureSession("handleHistoryAction");
   if (!appState.currentUser) {
     showStatusMessage("Sign in before changing history.", true);
     setAppLocked(true);
@@ -1143,11 +1307,13 @@ async function handleHistoryAction(button) {
     confirmLabel: "Delete entry",
     danger: true,
   });
+  if (!isSessionCurrent(session)) return;
   if (!confirmed) return;
 
   setButtonLoading(button, true);
   try {
     const deleted = isDailyDelete ? await deleteDailyLog(date) : await deleteWorkoutLog(workoutId);
+    if (!isSessionCurrent(session)) return;
     if (!deleted) {
       showStatusMessage("That entry was already removed.");
       return;
@@ -1171,10 +1337,13 @@ async function handleHistoryAction(button) {
       isDailyDelete ? `Deleted the daily log for ${date}.` : "Deleted the workout log.",
     );
   } catch (error) {
+    if (!isSessionCurrent(session)) return;
     console.error(error);
     showStatusMessage(formatFirebaseError(error), true);
   } finally {
-    setButtonLoading(button, false);
+    if (isSessionCurrent(session)) {
+      setButtonLoading(button, false);
+    }
   }
 }
 
@@ -1308,6 +1477,8 @@ function renderSignedOutState() {
 async function handleOfflinePreviewStart() {
   // An in-flight cloud hydration must not overwrite the separate local workspace.
   authChangeSequence += 1;
+  invalidateSession();
+  setWorkspaceEditsDisabled(false);
   setAuthFeedback("");
   setLoadingState(true, "Opening offline preview...", "Local Preview Mode");
   setDashboardHydrationState(true);

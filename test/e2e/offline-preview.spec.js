@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 
+import { DEFAULT_SETTINGS } from "../../js/config.js";
+
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
@@ -261,4 +263,42 @@ test("offline-preview dashboard has no automated WCAG A/AA violations", async ({
     .analyze();
 
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+});
+
+test("restore preview is read-only, settings are opt-in, and conflicts are explicit", async ({
+  page,
+}) => {
+  await openOfflinePreview(page, { seeded: true });
+  await page.getByRole("button", { name: "History" }).click();
+  const before = await page.evaluate((key) => localStorage.getItem(key), previewKey);
+  const workspace = JSON.parse(before);
+  const date = workspace.dailyLogs[0].date;
+  const backup = {
+    dailyLogs: [{ date, weight: 99, notes: "" }],
+    userSettings: { calorieTarget: 0 },
+  };
+  const upload = () =>
+    page.locator("#backup-import").setInputFiles({
+      name: "backup.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(backup)),
+    });
+  await upload();
+  await expect(page.getByLabel("Restore supplied settings")).not.toBeChecked();
+  await expect(page.getByLabel("Apply imported values to conflicting fields")).not.toBeChecked();
+  expect(await page.evaluate((key) => localStorage.getItem(key), previewKey)).toBe(before);
+  await page.locator("#confirmation-cancel-button").click();
+  expect(await page.evaluate((key) => localStorage.getItem(key), previewKey)).toBe(before);
+  await upload();
+  await page.getByLabel("Apply imported values to conflicting fields").check();
+  await page.locator("#confirmation-confirm-button").click();
+  await expect(page.locator("#toast-region")).toContainText("Backup import complete");
+  const after = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), previewKey);
+  expect(after.dailyLogs.find((log) => log.date === date).weight).toBe(99);
+  expect(after.dailyLogs.find((log) => log.date === date).calories).toBe(
+    workspace.dailyLogs[0].calories,
+  );
+  expect(after.userSettings.calorieTarget).toBe(
+    workspace.userSettings?.calorieTarget ?? DEFAULT_SETTINGS.calorieTarget,
+  );
 });

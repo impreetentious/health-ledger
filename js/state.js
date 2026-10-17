@@ -17,7 +17,53 @@ export const appState = {
   pendingGoogleCredential: null,
   pendingLinkEmail: "",
   previewMode: false,
+  authGeneration: 0,
+  workspaceRevision: 0,
+  restoreApplying: false,
 };
+
+let operationSequence = 0;
+const owners = new Map();
+
+export function invalidateSession() {
+  appState.authGeneration += 1;
+  appState.workspaceRevision += 1;
+  appState.restoreApplying = false;
+  owners.clear();
+}
+
+export function captureSession(owner) {
+  const token = {
+    generation: appState.authGeneration,
+    uid: appState.currentUser?.uid ?? null,
+    preview: appState.previewMode,
+    operationId: ++operationSequence,
+    owner,
+  };
+  if (owner) owners.set(owner, token.operationId);
+  return token;
+}
+
+export function isSessionCurrent(token) {
+  return (
+    token.generation === appState.authGeneration &&
+    token.uid === (appState.currentUser?.uid ?? null) &&
+    token.preview === appState.previewMode &&
+    (!token.owner || owners.get(token.owner) === token.operationId)
+  );
+}
+
+export function assertSessionCurrent(token, importProgress) {
+  if (isSessionCurrent(token)) return;
+  const error = new Error("This operation belongs to an earlier account session.");
+  error.name = "StaleSessionError";
+  if (importProgress) error.importProgress = importProgress;
+  throw error;
+}
+
+export function markWorkspaceChanged() {
+  appState.workspaceRevision += 1;
+}
 
 // ── Reads ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +91,7 @@ export function upsertDailyLogInState(dailyLog) {
   }
 
   appState.dailyLogs = nextLogs.sort(sortByDateAsc);
+  markWorkspaceChanged();
 }
 
 export function upsertWorkoutLogInState(workoutLog) {
@@ -58,14 +105,17 @@ export function upsertWorkoutLogInState(workoutLog) {
   }
 
   appState.workoutLogs = nextLogs.sort(sortByDateAsc);
+  markWorkspaceChanged();
 }
 
 export function removeDailyLogFromState(date) {
   appState.dailyLogs = appState.dailyLogs.filter((log) => log.date !== date);
+  markWorkspaceChanged();
 }
 
 export function removeWorkoutLogFromState(id) {
   appState.workoutLogs = appState.workoutLogs.filter((log) => log.id !== id);
+  markWorkspaceChanged();
 }
 
 export function clearUserDataState() {

@@ -265,12 +265,15 @@ export function requestConfirmation({
   message,
   confirmLabel = "Confirm",
   danger = false,
+  content = null,
 }) {
   const returnTarget = getDialogReturnTarget();
   closeTransientUi();
   dom.confirmationEyebrow.textContent = eyebrow;
   dom.confirmationTitle.textContent = title;
   dom.confirmationMessage.textContent = message;
+  dom.confirmationModal.querySelector("[data-restore-preview]")?.remove();
+  if (content) dom.confirmationMessage.after(content);
   dom.confirmationConfirmButton.textContent = confirmLabel;
   dom.confirmationConfirmButton.classList.toggle("danger-button", danger);
 
